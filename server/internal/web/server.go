@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/onllm-dev/onwatch/v2/internal/generic"
 )
 
 //go:embed templates/*.html
@@ -24,10 +26,16 @@ var staticFS embed.FS
 
 // Server wraps an HTTP server with graceful shutdown capabilities
 type Server struct {
-	httpServer *http.Server
-	handler    *Handler
-	logger     *slog.Logger
-	port       int
+	httpServer     *http.Server
+	handler        *Handler
+	logger         *slog.Logger
+	port           int
+	genericHandler *generic.Handler
+}
+
+// SetGenericHandler 注册通用适配器处理器（配置驱动平台）
+func (s *Server) SetGenericHandler(h *generic.Handler) {
+	s.genericHandler = h
 }
 
 // NewServer creates a new Server instance.

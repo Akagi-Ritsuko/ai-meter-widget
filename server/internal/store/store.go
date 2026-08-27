@@ -259,6 +259,16 @@ func (s *Store) createTables() error {
 			value TEXT NOT NULL
 		);
 
+		-- 通用适配器指标快照（配置驱动平台）
+		CREATE TABLE IF NOT EXISTS generic_metrics (
+			platform     TEXT PRIMARY KEY,
+			display_name TEXT NOT NULL DEFAULT '',
+			status       TEXT NOT NULL DEFAULT 'ok',
+			error        TEXT NOT NULL DEFAULT '',
+			metrics      TEXT NOT NULL DEFAULT '{}',
+			updated_at   TEXT NOT NULL
+		);
+
 		-- System alerts for in-dashboard notifications
 		CREATE TABLE IF NOT EXISTS system_alerts (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

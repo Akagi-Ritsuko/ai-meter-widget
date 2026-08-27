@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通用适配器配置 - ai-meter-widget</title>
+<style>
+:root { --bg:#0f1115; --card:#1a1d24; --border:#2a2e37; --text:#e6e8eb; --muted:#8b919c; --accent:#4f8cff; --ok:#3fb950; --err:#f85149; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI",Roboto,sans-serif; padding:24px; }
+h1 { font-size:20px; margin-bottom:4px; }
+.sub { color:var(--muted); font-size:13px; margin-bottom:24px; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px; margin-bottom:20px; }
+.card h2 { font-size:15px; margin-bottom:16px; }
+.row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.field { flex:1; min-width:180px; }
+.field label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+.field input, .field select, .field textarea { width:100%; background:#12151b; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px 10px; font-size:13px; }
+.field textarea { font-family:ui-monospace,Consolas,monospace; resize:vertical; min-height:60px; }
+button { background:var(--accent); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; cursor:pointer; }
+button.secondary { background:#2a2e37; }
+button.danger { background:#3d1d1f; color:#f85149; }
+button:hover { opacity:.9; }
+.platform-item { display:flex; align-items:center; justify-content:space-between; padding:12px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; background:#12151b; }
+.platform-item .info { flex:1; }
+.platform-item .name { font-weight:600; }
+.platform-item .meta { color:var(--muted); font-size:12px; margin-top:2px; }
+.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; margin-left:8px; }
+.badge.ok { background:#12261a; color:var(--ok); }
+.badge.error { background:#2a1416; color:var(--err); }
+.badge.off { background:#2a2e37; color:var(--muted); }
+.source-block { border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:12px; background:#12151b; }
+.source-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.mapping-row { display:flex; gap:8px; margin-bottom:6px; }
+.mapping-row input:first-child { flex:0 0 140px; }
+.mapping-row input:last-child { flex:1; }
+.mapping-row .del { flex:0 0 28px; background:none; border:none; color:var(--err); cursor:pointer; font-size:16px; }
+.test-result { margin-top:12px; padding:12px; border-radius:8px; background:#12151b; border:1px solid var(--border); font-size:12px; }
+.test-result pre { white-space:pre-wrap; word-break:break-all; color:var(--muted); margin-top:6px; max-height:200px; overflow:auto; }
+.test-result .ok { color:var(--ok); }
+.test-result .err { color:var(--err); }
+.metrics { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:12px; }
+.metric-card { background:#12151b; border:1px solid var(--border); border-radius:8px; padding:12px; }
+.metric-card .label { color:var(--muted); font-size:11px; }
+.metric-card .value { font-size:18px; font-weight:600; margin-top:4px; }
+.hidden { display:none; }
+.actions { display:flex; gap:8px; margin-top:16px; }
+</style>
+</head>
+<body>
+<h1>通用适配器配置</h1>
+<div class="sub">配置驱动的平台接入：填写接口地址、认证方式与 JSONPath 字段映射，新平台零代码接入。</div>
+
+<div class="card">
+  <h2>已配置平台</h2>
+  <div id="platformList"><div class="sub">加载中...</div></div>
+</div>
+
+<div class="card">
+  <h2 id="formTitle">新增平台</h2>
+  <div class="row">
+    <div class="field"><label>平台标识（唯一，如 my_platform）</label><input id="fName" placeholder="my_platform"></div>
+    <div class="field"><label>显示名称</label><input id="fDisplay" placeholder="My Platform"></div>
+    <div class="field"><label>轮询间隔（秒）</label><input id="fInterval" type="number" value="300"></div>
+    <div class="field"><label>状态</label><select id="fEnabled"><option value="true">启用</option><option value="false">停用</option></select></div>
+  </div>
+
+  <h2 style="margin-top:20px">认证方式</h2>
+  <div class="row">
+    <div class="field"><label>类型</label>
+      <select id="fAuthType">
+        <option value="api_key">api_key（请求头携带 Key）</option>
+        <option value="bearer">bearer（Bearer Token）</option>
+        <option value="cookie">cookie（Cookie）</option>
+        <option value="oauth_local">oauth_local（本机登录态文件）</option>
+        <option value="none">none（无需认证）</option>
+      </select>
+    </div>
+    <div class="field"><label>请求头名称（默认 Authorization）</label><input id="fAuthHeader" placeholder="Authorization"></div>
+    <div class="field"><label>凭证值（直接填写）</label><input id="fAuthKey" placeholder="sk-xxx 或留空"></div>
+    <div class="field"><label>凭证来源（env:VAR 或 file:path:jsonpath）</label><input id="fAuthKeyFrom" placeholder="env:MY_KEY 或 file:~/.xxx/auth.json:$.token"></div>
+  </div>
+
+  <h2 style="margin-top:20px">数据源</h2>
+  <div id="sources"></div>
+  <button class="secondary" onclick="addSource()">+ 添加数据源</button>
+
+  <div class="actions">
+    <button onclick="savePlatform()">保存平台</button>
+    <button class="secondary" onclick="testConnection()">测试连接</button>
+    <button class="secondary" onclick="resetForm()">清空表单</button>
+  </div>
+  <div id="testResult" class="test-result hidden"></div>
+</div>
+
+<div class="card">
+  <h2>当前指标</h2>
+  <div id="metricsView"><div class="sub">暂无数据</div></div>
+</div>
+
+<script>
+const API = '/api/generic';
+const SOURCE_TYPES = [
+  {v:'quota', label:'配额剩余 (quota)'},
+  {v:'balance', label:'余额 (balance)'},
+  {v:'cost', label:'费用 (cost)'},
+  {v:'tokens', label:'Token 消耗 (tokens)'}
+];
+const MAPPING_FIELDS = {
+  quota: ['quota.window','quota.used','quota.total','quota.percent','quota.reset_at','quota.unit'],
+  balance: ['balance.amount','balance.currency'],
+  cost: ['cost.today','cost.month','cost.currency'],
+  tokens: ['tokens.today','tokens.month']
+};
+
+function api(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({'X-Requested-With':'XMLHttpRequest','Content-Type':'application/json'}, opts.headers||{});
+  return fetch(API + path, opts).then(r => r.json().then(d => ({ok:r.ok, data:d})));
+}
+
+async function loadPlatforms() {
+  const {ok, data} = await api('/platforms');
+  const el = document.getElementById('platformList');
+  if (!ok || !data.length) { el.innerHTML = '<div class="sub">暂无配置的平台，请在下方表单添加。</div>'; return; }
+  el.innerHTML = data.map(p => {
+    const s = p.snapshot;
+    const badge = !p.enabled ? '<span class="badge off">停用</span>'
+      : (s && s.status==='ok') ? '<span class="badge ok">正常</span>'
+      : '<span class="badge error">' + (s ? s.status : '未采集') + '</span>';
+    const meta = (s && s.updated_at) ? '更新于 ' + s.updated_at : '尚未采集';
+    return `<div class="platform-item">
+      <div class="info">
+        <span class="name">${p.display_name || p.name}</span>${badge}
+        <div class="meta">${p.name} · ${p.sources.length} 个数据源 · ${meta}</div>
+      </div>
+      <div>
+        <button class="secondary" onclick='editPlatform(${JSON.stringify(JSON.stringify(p))})'>编辑</button>
+        <button class="danger" onclick="deletePlatform('${p.name}')">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadMetrics() {
+  const {ok, data} = await api('/metrics');
+  const el = document.getElementById('metricsView');
+  if (!ok || !data.length) { el.innerHTML = '<div class="sub">暂无数据</div>'; return; }
+  el.innerHTML = '<div class="metrics">' + data.map(s => {
+    const m = s.metrics || {};
+    let cards = '';
+    if (m.balance) cards += `<div class="metric-card"><div class="label">余额</div><div class="value">${m.balance.amount} ${m.balance.currency||''}</div></div>`;
+    if (m.cost) cards += `<div class="metric-card"><div class="label">费用 今日/月</div><div class="value">${m.cost.today||0} / ${m.cost.month||0} ${m.cost.currency||''}</div></div>`;
+    if (m.tokens) cards += `<div class="metric-card"><div class="label">Token 今日/月</div><div class="value">${m.tokens.today||0} / ${m.tokens.month||0}</div></div>`;
+    (m.quota||[]).forEach(q => {
+      cards += `<div class="metric-card"><div class="label">配额 ${q.window||''}</div><div class="value">${q.used||0} / ${q.total||0} (${(q.percent||0).toFixed(1)}%)</div><div class="sub">重置: ${q.reset_at||'-'}</div></div>`;
+    });
+    return `<div class="metric-card" style="grid-column:1/-1"><div class="label">${s.display_name||s.platform} <span class="badge ${s.status==='ok'?'ok':'error'}">${s.status}</span></div></div>` + cards;
+  }).join('') + '</div>';
+}
+
+function addSource(src) {
+  src = src || {};
+  const div = document.createElement('div');
+  div.className = 'source-block';
+  div.innerHTML = `
+    <div class="source-header">
+      <div class="field" style="flex:0 0 200px"><label>类型</label>
+        <select class="src-type">${SOURCE_TYPES.map(t=>`<option value="${t.v}" ${src.name===t.v?'selected':''}>${t.label}</option>`).join('')}</select>
+      </div>
+      <button class="danger" onclick="this.parentElement.parentElement.remove()">移除</button>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:2"><label>接口 URL</label><input class="src-url" value="${src.url||''}" placeholder="https://api.example.com/v1/usage"></div>
+      <div class="field"><label>方法</label><select class="src-method"><option value="GET" ${src.method==='POST'?'':'selected'}>GET</option><option value="POST" ${src.method==='POST'?'selected':''}>POST</option></select></div>
+      <div class="field"><label>间隔（秒，留空用平台级）</label><input class="src-interval" type="number" value="${src.interval||''}"></div>
+    </div>
+    <div class="field"><label>字段映射（统一字段 → JSONPath 表达式）</label></div>
+    <div class="mappings"></div>
+    <button class="secondary" onclick="addMapping(this)">+ 映射</button>
+    <div class="field" style="margin-top:10px"><label>静态值（统一字段 → 固定值，如 quota.window → 5h）</label></div>
+    <div class="statics"></div>
+    <button class="secondary" onclick="addStatic(this)">+ 静态值</button>
+  `;
+  div.querySelector('.src-type').addEventListener('change', e => rebuildMappings(div, e.target.value));
+  // 填充已有映射
+  const mappings = div.querySelector('.mappings');
+  Object.entries(src.mapping||{}).forEach(([k,v]) => addMappingRow(mappings, k, v));
+  const statics = div.querySelector('.statics');
+  Object.entries(src.static||{}).forEach(([k,v]) => addStaticRow(statics, k, v));
+  rebuildMappings(div, src.name || 'quota');
+  document.getElementById('sources').appendChild(div);
+}
+
+function rebuildMappings(div, type) {
+  const mappings = div.querySelector('.mappings');
+  const fields = MAPPING_FIELDS[type] || [];
+  const existing = {};
+  mappings.querySelectorAll('.mapping-row').forEach(r => {
+    const k = r.querySelector('input:first-child').value;
+    const v = r.querySelector('input:last-child').value;
+    if (k) existing[k] = v;
+  });
+  mappings.innerHTML = '';
+  fields.forEach(f => addMappingRow(mappings, f, existing[f] || ''));
+}
+
+function addMapping(btn) {
+  const mappings = btn.parentElement.querySelector('.mappings');
+  addMappingRow(mappings, '', '');
+}
+function addMappingRow(container, k, v) {
+  const row = document.createElement('div');
+  row.className = 'mapping-row';
+  row.innerHTML = `<input placeholder="统一字段" value="${k}"><input placeholder="JSONPath，如 $.data.usage.tokens" value="${v}"><button class="del" onclick="this.parentElement.remove()">×</button>`;
+  container.appendChild(row);
+}
+function addStatic(btn) {
+  const statics = btn.parentElement.querySelector('.statics');
+  addStaticRow(statics, '', '');
+}
+function addStaticRow(container, k, v) {
+  const row = document.createElement('div');
+  row.className = 'mapping-row';
+  row.innerHTML = `<input placeholder="统一字段" value="${k}"><input placeholder="静态值，如 5h" value="${v}"><button class="del" onclick="this.parentElement.remove()">×</button>`;
+  container.appendChild(row);
+}
+
+function collectSources() {
+  const sources = [];
+  document.querySelectorAll('#sources .source-block').forEach(block => {
+    const mapping = {}, statics = {};
+    block.querySelectorAll('.mappings .mapping-row').forEach(r => {
+      const k = r.querySelector('input:first-child').value.trim();
+      const v = r.querySelector('input:last-child').value.trim();
+      if (k && v) mapping[k] = v;
+    });
+    block.querySelectorAll('.statics .mapping-row').forEach(r => {
+      const k = r.querySelector('input:first-child').value.trim();
+      const v = r.querySelector('input:last-child').value.trim();
+      if (k && v) statics[k] = v;
+    });
+    sources.push({
+      name: block.querySelector('.src-type').value,
+      url: block.querySelector('.src-url').value.trim(),
+      method: block.querySelector('.src-method').value,
+      interval: parseInt(block.querySelector('.src-interval').value) || 0,
+      mapping, static: statics
+    });
+  });
+  return sources;
+}
+
+function collectForm() {
+  return {
+    name: document.getElementById('fName').value.trim(),
+    display_name: document.getElementById('fDisplay').value.trim(),
+    enabled: document.getElementById('fEnabled').value === 'true',
+    interval: parseInt(document.getElementById('fInterval').value) || 300,
+    auth: {
+      type: document.getElementById('fAuthType').value,
+      header: document.getElementById('fAuthHeader').value.trim(),
+      key: document.getElementById('fAuthKey').value.trim(),
+      key_from: document.getElementById('fAuthKeyFrom').value.trim()
+    },
+    sources: collectSources()
+  };
+}
+
+async function savePlatform() {
+  const p = collectForm();
+  if (!p.name) { alert('请填写平台标识'); return; }
+  if (!p.sources.length) { alert('请至少添加一个数据源'); return; }
+  const {ok, data} = await api('/platforms', {method:'POST', body:JSON.stringify(p)});
+  if (!ok) { alert('保存失败: ' + (data.error||'')); return; }
+  alert('保存成功');
+  loadPlatforms(); loadMetrics();
+}
+
+async function testConnection() {
+  const p = collectForm();
+  if (!p.name) { alert('请填写平台标识'); return; }
+  const el = document.getElementById('testResult');
+  el.classList.remove('hidden');
+  el.innerHTML = '<div class="sub">测试中...</div>';
+  const {ok, data} = await api('/test', {method:'POST', body:JSON.stringify(p)});
+  if (!ok) { el.innerHTML = `<div class="err">测试失败: ${data.error||''}</div>`; return; }
+  el.innerHTML = data.sources.map(s => `
+    <div class="${s.ok?'ok':'err'}">${s.name}: ${s.ok?'成功':'失败' + (s.error?' - '+s.error:'')}</div>
+    ${s.ok ? `<pre>${JSON.stringify(s.metrics, null, 2)}</pre>` : ''}
+  `).join('');
+}
+
+function editPlatform(jsonStr) {
+  const p = JSON.parse(jsonStr);
+  document.getElementById('formTitle').textContent = '编辑平台: ' + p.name;
+  document.getElementById('fName').value = p.name;
+  document.getElementById('fDisplay').value = p.display_name || '';
+  document.getElementById('fInterval').value = p.interval || 300;
+  document.getElementById('fEnabled').value = String(p.enabled !== false);
+  document.getElementById('fAuthType').value = p.auth.type || 'api_key';
+  document.getElementById('fAuthHeader').value = p.auth.header || '';
+  document.getElementById('fAuthKey').value = p.auth.key || '';
+  document.getElementById('fAuthKeyFrom').value = p.auth.key_from || '';
+  document.getElementById('sources').innerHTML = '';
+  (p.sources||[]).forEach(addSource);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function resetForm() {
+  document.getElementById('formTitle').textContent = '新增平台';
+  ['fName','fDisplay','fAuthHeader','fAuthKey','fAuthKeyFrom'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fInterval').value = 300;
+  document.getElementById('fEnabled').value = 'true';
+  document.getElementById('fAuthType').value = 'api_key';
+  document.getElementById('sources').innerHTML = '';
+  document.getElementById('testResult').classList.add('hidden');
+}
+
+async function deletePlatform(name) {
+  if (!confirm('确认删除平台 ' + name + '？')) return;
+  const {ok} = await api('/platforms/' + name, {method:'DELETE'});
+  if (ok) { loadPlatforms(); loadMetrics(); }
+}
+
+// 初始化
+addSource();
+loadPlatforms();
+loadMetrics();
+setInterval(loadMetrics, 15000);
+</script>
+</body>
+</html>

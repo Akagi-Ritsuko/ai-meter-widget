@@ -1,3 +1,13 @@
+<!--
+ * @Author: guotao
+ * @Date: 2026-08-27 14:53:32
+ * @LastEditors: guotao
+ * @LastEditTime: 2026-08-27 17:53:54
+ * @FilePath: \ai-meter-widget\docs\roadmap.md
+ * @Description: 
+ * 
+ * Copyright (c) 2026 by lzlj, All Rights Reserved. 
+-->
 # 里程碑与进展追踪（Roadmap）
 
 ## 1. 里程碑总览
@@ -27,11 +37,29 @@
 - [ ] NFR-2：守护进程运行 24h 内存稳定 <60MB（待长时间运行验证）
 - [x] NFR-3：凭证存 .env，日志不打印凭证（Cursor 凭据从本地 SQLite 只读探测）
 
-**状态**：进行中（2026-08-27 启动）
+**状态**：进行中（2026-08-27 启动，核心执行已完成，剩余项依赖用户环境/时间）
 
-**进展记录**：
-- 2026-08-27：Go 1.26.7 安装、onWatch v2.13.5 fork 到 server/、Windows 编译成功、debug 模式运行、Web 面板 API 验证通过、Cursor 登录态自动探测并采集配额成功
-- 2026-08-27：确认 onWatch 已内置 DeepSeek / OpenCode Go / Z.ai(cn=智谱) 适配器，P0 平台仅火山引擎 Ark 需新写
+**已执行内容**：
+
+| 步骤 | 内容                                                                       | 结果         |
+| ---- | -------------------------------------------------------------------------- | ------------ |
+| 1    | 安装 Go 1.26.7（winget），配置国内代理 `GOPROXY=https://goproxy.cn,direct` | 成功         |
+| 2    | fork onWatch v2.13.5 到 `server/`（`git clone --depth 1`）                 | 成功         |
+| 3    | 删除 `server/.git`，将嵌套仓库并入父仓库（解决 gitlink 不显示新增的问题）  | 成功         |
+| 4    | Windows 编译 `go build -o onwatch.exe .`                                   | 成功（29MB） |
+| 5    | 创建数据目录 `~/.onwatch/data`，debug 模式运行                             | 成功         |
+| 6    | 验证 Web 面板：localhost:9211 认证后 API 返回 200                          | 成功         |
+| 7    | 验证本机登录态探测：Cursor 凭据从本地 SQLite 自动识别                      | 成功         |
+| 8    | 验证配额采集：Cursor Auto+Composer / API Usage，含重置倒计时               | 成功         |
+| 9    | 内存验证：WorkingSet 42.4MB（NFR-2 <60MB 达标）                            | 成功         |
+| 10   | 添加根目录 `.gitignore`（编译产物/凭证/未来 widget/firmware 构建目录）     | 成功         |
+
+**关键发现**：onWatch 已内置 DeepSeek / OpenCode Go / Z.ai(cn=智谱) 适配器，P0 平台仅火山引擎 Ark 需新写。
+
+**剩余待办**（不阻塞 Phase 2）：
+- Claude/Codex 凭证验证（取决于本机是否安装对应 CLI）
+- macOS/Linux 交叉编译验证
+- 24h 内存稳定性测试
 
 ## 3. Phase 2 通用适配器 + P0 平台
 
