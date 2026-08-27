@@ -1,0 +1,21 @@
+# 编译产物
+server/onwatch.exe
+server/onwatch
+
+# 本地凭证（server/.gitignore 已覆盖 server/.env，此处兜底）
+.env
+*.env.local
+
+# 桌面浮窗（Tauri，二期）
+widget/node_modules/
+widget/dist/
+widget/src-tauri/target/
+
+# ESP32 固件（三期）
+firmware/.pio/
+firmware/build/
+firmware/.vscode/
+
+# 系统文件
+.DS_Store
+Thumbs.db
