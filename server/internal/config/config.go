@@ -47,6 +47,11 @@ type Config struct {
 	// OpenCode Go provider configuration
 	OpenCodeGoWorkspaceID string // OPENCODE_GO_WORKSPACE_ID
 	OpenCodeGoAuthCookie  string // OPENCODE_GO_AUTH_COOKIE
+	// Volcano Ark provider configuration
+	ArkAccessKey string // ARK_ACCESS_KEY
+	ArkSecretKey string // ARK_SECRET_KEY
+	ArkRegion    string // ARK_REGION (default: cn-beijing)
+	ArkBaseURL   string // ARK_BASE_URL (default: https://ark.cn-beijing.volcengineapi.com)
 	CodexShowAvailable string // CODEX_SHOW_AVAILABLE: "usage" | "available", default "usage" (Codex-specific override)
 	CodexAutoStart5h   bool   // CODEX_AUTO_START_5H: auto-send a starter ping when the 5h window resets (Beta, default off)
 	CodexAutoStart7d   bool   // CODEX_AUTO_START_7D: auto-send a starter ping when the weekly window resets (Beta, default off)
@@ -228,6 +233,7 @@ var onwatchEnvKeys = []string{
 	"OPENCODE_GO_WORKSPACE_ID",
 	"OPENCODE_GO_AUTH_COOKIE",
 	"OPENCODE_HOME",
+	"ARK_",
 	"ANTIGRAVITY_ENABLED",
 	"MINIMAX_API_KEY",
 	"OPENROUTER_API_KEY",
@@ -340,6 +346,14 @@ func loadFromEnvAndFlags(flags *flagValues) (*Config, error) {
 	cfg.OpenCodeEnabled = os.Getenv("OPENCODE_ENABLED") == "true"
 	cfg.OpenCodeGoWorkspaceID = strings.TrimSpace(os.Getenv("OPENCODE_GO_WORKSPACE_ID"))
 	cfg.OpenCodeGoAuthCookie = strings.TrimSpace(os.Getenv("OPENCODE_GO_AUTH_COOKIE"))
+	// Volcano Ark AFP tracking via Access Key credentials (HMAC-SHA256 V4).
+	cfg.ArkAccessKey = strings.TrimSpace(os.Getenv("ARK_ACCESS_KEY"))
+	cfg.ArkSecretKey = strings.TrimSpace(os.Getenv("ARK_SECRET_KEY"))
+	cfg.ArkRegion = strings.TrimSpace(os.Getenv("ARK_REGION"))
+	if cfg.ArkRegion == "" {
+		cfg.ArkRegion = "cn-beijing"
+	}
+	cfg.ArkBaseURL = strings.TrimSpace(os.Getenv("ARK_BASE_URL"))
 	// Codex auto quota-starter (Beta): default off; the dashboard toggle in
 	// provider_settings overrides these env-provided defaults at runtime.
 	cfg.CodexAutoStart5h = os.Getenv("CODEX_AUTO_START_5H") == "true"
@@ -725,6 +739,9 @@ func (c *Config) AvailableProviders() []string {
 	if c.OpenCodeGoWorkspaceID != "" && c.OpenCodeGoAuthCookie != "" {
 		providers = append(providers, "opencode")
 	}
+	if c.ArkAccessKey != "" && c.ArkSecretKey != "" {
+		providers = append(providers, "ark")
+	}
 	return providers
 }
 
@@ -761,6 +778,8 @@ func (c *Config) HasProvider(name string) bool {
 		return c.KimiToken != "" || c.KimiEnabled
 	case "opencode":
 		return c.OpenCodeGoWorkspaceID != "" && c.OpenCodeGoAuthCookie != ""
+	case "ark":
+		return c.ArkAccessKey != "" && c.ArkSecretKey != ""
 	}
 	return false
 }
@@ -811,6 +830,9 @@ func (c *Config) HasMultipleProviders() bool {
 		count++
 	}
 	if c.OpenCodeGoWorkspaceID != "" && c.OpenCodeGoAuthCookie != "" {
+		count++
+	}
+	if c.ArkAccessKey != "" && c.ArkSecretKey != "" {
 		count++
 	}
 	return count > 1
@@ -888,6 +910,8 @@ func (c *Config) String() string {
 	opencodeDisplay := redactAPIKey(c.OpenCodeGoAuthCookie, "")
 	fmt.Fprintf(&sb, "  OpenCodeGoWorkspaceID: %s,\n", c.OpenCodeGoWorkspaceID)
 	fmt.Fprintf(&sb, "  OpenCodeGoAuthCookie: %s,\n", opencodeDisplay)
+	fmt.Fprintf(&sb, "  ArkAccessKey: %s,\n", redactAPIKey(c.ArkAccessKey, ""))
+	fmt.Fprintf(&sb, "  ArkRegion: %s,\n", c.ArkRegion)
 	if c.KimiAutoToken {
 		fmt.Fprintf(&sb, "  KimiAutoToken: true,\n")
 	}

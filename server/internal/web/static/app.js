@@ -7381,7 +7381,7 @@ function renderCyclesTable() {
 
   const provider = getCurrentProvider();
   const quotaNames = State.cyclesQuotaNames;
-  const usePercent = provider === 'anthropic' || provider === 'copilot' || provider === 'codex' || provider === 'antigravity' || provider === 'minimax' || provider === 'gemini' || provider === 'openrouter' || provider === 'cursor' || provider === 'grok' || provider === 'kimi' || provider === 'moonshot' || provider === 'deepseek' || provider === 'opencode';
+  const usePercent = provider === 'anthropic' || provider === 'copilot' || provider === 'codex' || provider === 'antigravity' || provider === 'minimax' || provider === 'gemini' || provider === 'openrouter' || provider === 'cursor' || provider === 'grok' || provider === 'kimi' || provider === 'moonshot' || provider === 'deepseek' || provider === 'opencode' || provider === 'ark';
   const deltaUsesPercent = usePercent && provider !== 'minimax' && provider !== 'moonshot' && provider !== 'deepseek';
   const isLoggingHistory = State.isLoggingHistory === true;
   const showAccount = isAccountsOverviewMode(provider);

@@ -97,6 +97,7 @@ type Handler struct {
 	grokTracker        *tracker.GrokTracker
 	kimiTracker        *tracker.KimiTracker
 	opencodeTracker    *tracker.OpenCodeTracker
+	arkTracker         *tracker.ArkTracker
 	updater            *update.Updater
 	notifier           Notifier
 	agentManager       ProviderAgentController
@@ -1123,6 +1124,7 @@ func providerCatalog() []providerCatalogItem {
 		{Key: "grok", Name: "Grok", Description: "Grok (xAI) usage tracking", AutoDetectable: true},
 		{Key: "kimi", Name: "Kimi Code", Description: "Kimi Code CLI OAuth quota tracking", AutoDetectable: true},
 		{Key: "opencode", Name: "OpenCode Go", Description: "OpenCode Go quota tracking", AutoDetectable: false},
+		{Key: "ark", Name: "Volcano Ark", Description: "Volcano Engine Ark AFP quota tracking"},
 	}
 }
 
@@ -1201,6 +1203,8 @@ func (h *Handler) isProviderConfigured(provider string) bool {
 		return api.DetectKimiCredentials(h.logger) != nil
 	case "opencode":
 		return h.config != nil && strings.TrimSpace(h.config.OpenCodeGoWorkspaceID) != "" && strings.TrimSpace(h.config.OpenCodeGoAuthCookie) != ""
+	case "ark":
+		return h.config != nil && strings.TrimSpace(h.config.ArkAccessKey) != "" && strings.TrimSpace(h.config.ArkSecretKey) != ""
 	default:
 		return false
 	}
@@ -1444,6 +1448,9 @@ var providerEnumFields = map[string]map[string][]string{
 	"opencode": {
 		"display_mode": {"usage", "available"},
 	},
+	"ark": {
+		"display_mode": {"usage", "available"},
+	},
 }
 
 // sanitizeProviderSettings validates enum fields and resets invalid values
@@ -1556,6 +1563,18 @@ func ApplyProviderSettingsFromDB(st *store.Store, cfg *config.Config, logger *sl
 		}
 		if cookie, _ := s["auth_cookie"].(string); cookie != "" {
 			cfg.OpenCodeGoAuthCookie = cookie
+		}
+	}
+	// Volcano Ark credentials come from the UI provider settings.
+	if s := provSettings["ark"]; s != nil {
+		if key, _ := s["access_key"].(string); key != "" {
+			cfg.ArkAccessKey = key
+		}
+		if secret, _ := s["secret_key"].(string); secret != "" {
+			cfg.ArkSecretKey = secret
+		}
+		if region, _ := s["region"].(string); region != "" {
+			cfg.ArkRegion = region
 		}
 	}
 
@@ -1867,6 +1886,8 @@ func (h *Handler) Current(w http.ResponseWriter, r *http.Request) {
 		h.currentKimi(w, r)
 	case "opencode":
 		h.currentOpenCode(w, r)
+	case "ark":
+		h.currentArk(w, r)
 	default:
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider: %s", provider))
 	}
@@ -2323,6 +2344,9 @@ func (h *Handler) currentBoth(w http.ResponseWriter, r *http.Request) {
 	if h.config.HasProvider("opencode") && providerTelemetryEnabled(visibility, "opencode") {
 		response["opencode"] = h.buildOpenCodeCurrent()
 	}
+	if h.config.HasProvider("ark") && providerTelemetryEnabled(visibility, "ark") {
+		response["ark"] = h.buildArkCurrent()
+	}
 	respondJSON(w, http.StatusOK, response)
 }
 
@@ -2675,6 +2699,8 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 		h.historyKimi(w, r)
 	case "opencode":
 		h.historyOpenCode(w, r)
+	case "ark":
+		h.historyArk(w, r)
 	default:
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider: %s", provider))
 	}
@@ -3109,6 +3135,28 @@ func (h *Handler) historyBoth(w http.ResponseWriter, r *http.Request) {
 				opencodeData = append(opencodeData, entry)
 			}
 			response["opencode"] = opencodeData
+		}
+	}
+
+	if h.config.HasProvider("ark") && providerTelemetryEnabled(visibility, "ark") && h.store != nil {
+		snapshots, err := h.store.QueryArkRange(start, now, 200)
+		if err == nil {
+			step := downsampleStep(len(snapshots), maxChartPoints)
+			last := len(snapshots) - 1
+			arkData := make([]map[string]interface{}, 0, min(len(snapshots), maxChartPoints))
+			for i, snap := range snapshots {
+				if step > 1 && i != 0 && i != last && i%step != 0 {
+					continue
+				}
+				entry := map[string]interface{}{
+					"capturedAt": snap.CapturedAt.Format(time.RFC3339),
+				}
+				for _, q := range snap.Windows {
+					entry[q.Name] = q.Percent
+				}
+				arkData = append(arkData, entry)
+			}
+			response["ark"] = arkData
 		}
 	}
 
@@ -3720,6 +3768,8 @@ func (h *Handler) Cycles(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]interface{}{"cycles": []interface{}{}})
 	case "opencode":
 		h.cyclesOpenCode(w, r)
+	case "ark":
+		h.cyclesArk(w, r)
 	default:
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider: %s", provider))
 	}
@@ -4093,6 +4143,8 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]interface{}{"summaries": []interface{}{}})
 	case "opencode":
 		h.summaryOpenCode(w, r)
+	case "ark":
+		h.summaryArk(w, r)
 	default:
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider: %s", provider))
 	}
@@ -4912,6 +4964,8 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 		h.insightsKimi(w, r, rangeDur)
 	case "opencode":
 		h.insightsOpenCode(w, r, rangeDur)
+	case "ark":
+		h.insightsArk(w, r, rangeDur)
 	default:
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider: %s", provider))
 	}
@@ -5008,6 +5062,9 @@ func (h *Handler) insightsBoth(w http.ResponseWriter, r *http.Request, rangeDur 
 	}
 	if h.config.HasProvider("opencode") && providerTelemetryEnabled(visibility, "opencode") {
 		response["opencode"] = h.buildOpenCodeInsights(hidden, rangeDur)
+	}
+	if h.config.HasProvider("ark") && providerTelemetryEnabled(visibility, "ark") {
+		response["ark"] = h.buildArkInsights(hidden, rangeDur)
 	}
 
 	respondJSON(w, http.StatusOK, response)
@@ -7424,6 +7481,8 @@ func (h *Handler) CycleOverview(w http.ResponseWriter, r *http.Request) {
 		h.cycleOverviewKimi(w, r)
 	case "opencode":
 		h.cycleOverviewOpenCode(w, r)
+	case "ark":
+		h.cycleOverviewArk(w, r)
 	default:
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider: %s", provider))
 	}
@@ -11068,6 +11127,8 @@ func (h *Handler) LoggingHistory(w http.ResponseWriter, r *http.Request) {
 		h.loggingHistoryKimi(w, r)
 	case "opencode":
 		h.loggingHistoryOpenCode(w, r)
+	case "ark":
+		h.loggingHistoryArk(w, r)
 	default:
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider: %s", provider))
 	}

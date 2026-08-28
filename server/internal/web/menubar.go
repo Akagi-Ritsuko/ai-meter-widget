@@ -417,6 +417,15 @@ func (h *Handler) buildMenubarProviders(settings *menubar.Settings, includeHidde
 			}
 		}
 	}
+	if h.config != nil && h.config.HasProvider("ark") && h.providerDashboardVisible("ark", visibility) {
+		payload := h.buildArkCurrent()
+		if card := normalizeProviderCard("ark", resolveProviderTabLabel("ark", labels), "", payload, normalized.WarningPercent, normalized.CriticalPercent); card != nil {
+			providers = append(providers, *card)
+			if captured := parseCapturedAt(payload); captured.After(latest) {
+				latest = captured
+			}
+		}
+	}
 	if h.config != nil && h.config.HasProvider("cursor") && h.providerDashboardVisible("cursor", visibility) {
 		payload := h.buildCursorCurrent()
 		if card := normalizeProviderCard("cursor", resolveProviderTabLabel("cursor", labels), "", payload, normalized.WarningPercent, normalized.CriticalPercent); card != nil {

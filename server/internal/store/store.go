@@ -1145,6 +1145,45 @@ func (s *Store) migrateSchema() error {
 		}
 	}
 
+	// Volcano Engine Ark (GetAFPUsage) tables
+	if _, err := s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS ark_snapshots (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			captured_at TEXT NOT NULL,
+			raw_json TEXT,
+			plan_type TEXT NOT NULL DEFAULT ''
+		);
+
+		CREATE TABLE IF NOT EXISTS ark_quota_values (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			snapshot_id INTEGER NOT NULL,
+			quota_name TEXT NOT NULL,
+			quota REAL NOT NULL DEFAULT 0,
+			used REAL NOT NULL DEFAULT 0,
+			used_percent REAL NOT NULL DEFAULT 0,
+			resets_at TEXT,
+			subscribe_at TEXT,
+			FOREIGN KEY (snapshot_id) REFERENCES ark_snapshots(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS ark_reset_cycles (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			quota_name TEXT NOT NULL,
+			cycle_start TEXT NOT NULL,
+			cycle_end TEXT,
+			reset_at TEXT,
+			peak_utilization REAL NOT NULL DEFAULT 0,
+			total_delta REAL NOT NULL DEFAULT 0
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_ark_snapshots_captured ON ark_snapshots(captured_at);
+		CREATE INDEX IF NOT EXISTS idx_ark_quota_values_snapshot ON ark_quota_values(snapshot_id);
+		CREATE INDEX IF NOT EXISTS idx_ark_cycles_name_start ON ark_reset_cycles(quota_name, cycle_start);
+		CREATE INDEX IF NOT EXISTS idx_ark_cycles_name_active ON ark_reset_cycles(quota_name, cycle_end) WHERE cycle_end IS NULL;
+	`); err != nil {
+		return fmt.Errorf("failed to create ark schema: %w", err)
+	}
+
 	return nil
 }
 

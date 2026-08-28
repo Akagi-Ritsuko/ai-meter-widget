@@ -63,6 +63,8 @@
 
 ## 3. Phase 2 通用适配器 + P0 平台
 
+> 详细需求分解与任务计划见 [phase2-plan.md](phase2-plan.md)
+
 **目标**：实现配置驱动的通用适配器引擎，并用 DeepSeek 作为首个落地案例验证；补齐 P0 平台缺口（火山引擎 Ark）。
 
 > 注：Phase 1 已确认 DeepSeek / 智谱(GLM, Z.ai cn) / OpenCode Go 已内置在 onWatch 中，P0 平台仅火山引擎 Ark 需新写适配器。
