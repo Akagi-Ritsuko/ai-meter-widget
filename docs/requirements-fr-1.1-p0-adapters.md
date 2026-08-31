@@ -32,7 +32,7 @@ A built-in adapter follows the standard platform-integration contract shared by 
 | Platform | Metrics to display | Source |
 |---|---|---|
 | DeepSeek | Balance (amount, currency), availability | Official balance API `GET /user/balance` |
-| 火山 Ark | Quota (usage / limit, per resource) | Official quota interface — **endpoint TBD pending interface research** (详见 P2-09 前期调研) |
+| 火山 Ark | Quota (usage / limit, per resource) | Official quota interface `POST ?Action=GetAFPUsage&Version=2024-01-01`（四窗口：5h/daily/weekly/monthly，详见 D5 调研文档） |
 | 智谱 GLM | Quota (usage / limit) | Official quota API via Z.ai cn region |
 | OpenCode | Quota (OpenCode Go subscription: used / limit, format currency or percent, reset time) | Dashboard scrape `https://opencode.ai/workspace/{workspace_id}/go` |
 
@@ -48,8 +48,8 @@ A built-in adapter follows the standard platform-integration contract shared by 
 | ID | Requirement |
 |---|---|
 | ARK-01 | Research the official Volcano Engine Ark usage/quota API first (auth method, endpoint, response schema) and document the findings before implementation. |
-| ARK-02 | Implement full adapter stack following the existing DeepSeek/Minimax adapter structure: `internal/api/ark_*.go`, `internal/agent/ark_agent.go`, `internal/tracker/ark_tracker.go`, `internal/store/ark_store.go`, `internal/web/ark_handlers.go` (+ panel card + route `GET /api/ark/*`). |
-| ARK-03 | Authentication: api_key via a dedicated env var (e.g. `ARK_API_KEY`). Credential is read from `.env` only, never stored in the DB in plaintext. |
+| ARK-02 | Implement full adapter stack following the existing DeepSeek/Minimax adapter structure: `internal/api/ark_*.go`, `internal/agent/ark_agent.go`, `internal/tracker/ark_tracker.go`, `internal/store/ark_store.go`, `internal/web/ark_handlers.go` (+ panel card). 路由接入统一分发端点（current/history/cycles/summary/insights/logging-history），**不新增专属路由**，与 DeepSeek/OpenCode 一致。 |
+| ARK-03 | Authentication: Access Key 成对凭证 `ARK_ACCESS_KEY` + `ARK_SECRET_KEY`（HMAC-SHA256 V4 签名，service=`ark`，region=`cn-beijing`）。Credential is read from `.env` only, never stored in the DB in plaintext. |
 | ARK-04 | Register the agent with `AgentManager.RegisterFactory("ark", …)` so it starts/stops like every other provider. |
 | ARK-05 | If the key is unset, the panel must show `unconfigured` status (no error spam, no partial cards). |
 | ARK-06 | Mock-server unit tests must cover client parsing and tracker behavior without external network. |
@@ -115,11 +115,11 @@ AgentManager (RegisterFactory "deepseek" | "ark" | "zai" | "opencode")
 
 | Item | DeepSeek | 智谱 GLM (Z.ai cn) | OpenCode Go | 火山 Ark |
 |---|---|---|---|---|
-| Env vars | `DEEPSEEK_API_KEY` | `ZAI_API_KEY`, `ZAI_BASE_URL`, `ZAI_REGION=cn` | `OPENCODE_GO_WORKSPACE_ID`, `OPENCODE_GO_AUTH_COOKIE` (opt-in), `OPENCODE_ENABLED` (auth.json path) | `ARK_API_KEY` (proposed; final name per research) |
-| Endpoint | `https://api.deepseek.com/user/balance` | `https://api.z.ai/api/monitor/usage/quota/limit` (base overridable) | `https://opencode.ai/workspace/{workspace_id}/go` | **TBD — to be confirmed from official docs** |
-| Method | GET | GET | GET (dashboard scrape) | TBD |
-| Auth header | `Authorization: Bearer <key>` | `Authorization: Bearer <key>` | Cookie `auth=<value>` (value only) + browser-like User-Agent; redirects not followed | TBD |
-| Response size cap | 64 KiB | (per client impl) | 2 MiB | ≤1 MiB (recommended) |
+| Env vars | `DEEPSEEK_API_KEY` | `ZAI_API_KEY`, `ZAI_BASE_URL`, `ZAI_REGION=cn` | `OPENCODE_GO_WORKSPACE_ID`, `OPENCODE_GO_AUTH_COOKIE` (opt-in), `OPENCODE_ENABLED` (auth.json path) | `ARK_ACCESS_KEY` + `ARK_SECRET_KEY`（可选 `ARK_REGION`/`ARK_BASE_URL`） |
+| Endpoint | `https://api.deepseek.com/user/balance` | `https://api.z.ai/api/monitor/usage/quota/limit` (base overridable) | `https://opencode.ai/workspace/{workspace_id}/go` | `https://ark.cn-beijing.volcengineapi.com/?Action=GetAFPUsage&Version=2024-01-01` |
+| Method | GET | GET | GET (dashboard scrape) | POST（Body `{}`） |
+| Auth header | `Authorization: Bearer <key>` | `Authorization: Bearer <key>` | Cookie `auth=<value>` (value only) + browser-like User-Agent; redirects not followed | **HMAC-SHA256 V4 签名**（AK/SK，service=`ark`，region=`cn-beijing`） |
+| Response size cap | 64 KiB | (per client impl) | 2 MiB | 1 MiB |
 | Timeout | 30 s (request + transport) | 30 s | 10 s scrape timeout | 30 s (follow existing pattern) |
 
 ### 3.3 Request / response format requirements
@@ -172,7 +172,7 @@ AgentManager (RegisterFactory "deepseek" | "ark" | "zai" | "opencode")
 | TC-01 DeepSeek | Set valid `DEEPSEEK_API_KEY`, wait ≤ 1 poll interval | Card shows balance (e.g. `$12.50 USD`) + availability, status `ok` |
 | TC-02 智谱 GLM | Set valid `ZAI_API_KEY` + `ZAI_REGION=cn` | Card shows quota used/limit, status `ok` |
 | TC-03 OpenCode | Set valid workspace ID + auth cookie | Card shows OpenCode Go quota (currency or percent format + reset time), status `ok` |
-| TC-04 火山 Ark | Set valid `ARK_API_KEY` | Card shows Ark quota, status `ok` |
+| TC-04 火山 Ark | Set valid `ARK_ACCESS_KEY` + `ARK_SECRET_KEY` | Card shows Ark quota, status `ok` |
 | TC-05 All four | All credentials valid simultaneously | All four cards `ok`, daemon stable, no inter-provider interference |
 
 ### 4.3 Test cases — error handling (invalid credentials)

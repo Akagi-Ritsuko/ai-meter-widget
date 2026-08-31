@@ -140,6 +140,9 @@
         {{else if eq .CurrentProvider "opencode"}}
         <!-- OpenCode Go quota cards (dynamically populated by JS) -->
         <div class="quota-grid" id="quota-grid-opencode" data-provider="opencode"></div>
+        {{else if eq .CurrentProvider "ark"}}
+        <!-- Volcano Ark quota cards (dynamically populated by JS) -->
+        <div class="quota-grid" id="quota-grid-ark" data-provider="ark"></div>
         {{else if eq .CurrentProvider "api-integrations"}}
         <div class="api-integrations-dashboard" id="api-integrations-dashboard" data-provider="api-integrations">
             <div class="quota-grid" id="api-integrations-grid"></div>

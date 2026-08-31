@@ -37,17 +37,23 @@ type arkInsightStat struct {
 }
 
 var arkQuotaDisplayOrder = map[string]int{
-	"five_hour": 1,
-	"daily":     2,
-	"weekly":    3,
-	"monthly":   4,
+	"five_hour":  1,
+	"daily":      2,
+	"weekly":     3,
+	"monthly":    4,
+	"cp_session": 5,
+	"cp_weekly":  6,
+	"cp_monthly": 7,
 }
 
 var arkDisplayNames = map[string]string{
-	"five_hour": "5-Hour",
-	"daily":     "Daily",
-	"weekly":    "Weekly",
-	"monthly":   "Monthly",
+	"five_hour":  "5-Hour",
+	"daily":      "Daily",
+	"weekly":     "Weekly",
+	"monthly":    "Monthly",
+	"cp_session": "Coding 5-Hour",
+	"cp_weekly":  "Coding Weekly",
+	"cp_monthly": "Coding Monthly",
 }
 
 func arkDisplayName(name string) string {
@@ -519,7 +525,7 @@ func (h *Handler) buildArkInsights(hidden map[string]bool, _ time.Duration) arkI
 		}
 	}
 
-	preferredQuotas := []string{"five_hour", "daily", "weekly", "monthly"}
+	preferredQuotas := []string{"five_hour", "daily", "weekly", "monthly", "cp_session", "cp_weekly", "cp_monthly"}
 	selected := make([]api.ArkWindowSnapshot, 0, len(preferredQuotas))
 	for _, name := range preferredQuotas {
 		for _, w := range windows {

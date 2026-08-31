@@ -31,7 +31,7 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 }
 
 // ListPlatforms GET /api/generic/platforms
-// 返回平台配置列表，附带最新快照状态
+// 返回平台配置列表，附带最新快照状态。凭证字段脱敏（NFR-3 / P2-14）。
 func (h *Handler) ListPlatforms(w http.ResponseWriter, r *http.Request) {
 	platforms, err := LoadPlatforms(h.store)
 	if err != nil {
@@ -45,6 +45,10 @@ func (h *Handler) ListPlatforms(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]platformWithStatus, 0, len(platforms))
 	for _, p := range platforms {
+		// 凭证脱敏：不回显明文 key，仅保留 key_from 引用
+		if p.Auth.Key != "" {
+			p.Auth.Key = maskCredential(p.Auth.Key)
+		}
 		item := platformWithStatus{PlatformConfig: p}
 		if s, ok := h.agent.GetSnapshot(p.Name); ok {
 			item.Snapshot = s
@@ -52,6 +56,14 @@ func (h *Handler) ListPlatforms(w http.ResponseWriter, r *http.Request) {
 		result = append(result, item)
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// maskCredential 将凭证脱敏为掩码（保留前 4 后 4）。
+func maskCredential(key string) string {
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
 }
 
 // GetMetrics GET /api/generic/metrics

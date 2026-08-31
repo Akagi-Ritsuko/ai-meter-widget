@@ -3933,6 +3933,120 @@ function updateOpenCodeCard(quota) {
   }
 }
 
+function renderArkQuotaCards(quotas, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (!Array.isArray(quotas) || quotas.length === 0) {
+    container.innerHTML = '<p class="empty-state">No Ark data available</p>';
+    return;
+  }
+
+  container.innerHTML = quotas.map((q, i) => {
+    const icon = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+    const displayName = q.displayName || q.name;
+    const displayPct = q.cardPercent != null ? q.cardPercent : (q.utilization || 0);
+    const usagePct = displayPct.toFixed(1);
+    const status = q.status || 'healthy';
+    const statusCfg = statusConfig[status] || statusConfig.healthy;
+    const progressId = `progress-ark-${q.name}`;
+    const percentId = `percent-ark-${q.name}`;
+    const fractionId = `fraction-ark-${q.name}`;
+    const statusId = `status-ark-${q.name}`;
+    const resetId = `reset-ark-${q.name}`;
+    const countdownId = `countdown-ark-${q.name}`;
+
+    const cardLabel = q.format === 'currency' ? '$' + (q.used || 0).toFixed(2) + ' / $' + (q.limit || 0).toFixed(2) : (q.used || 0) + ' / ' + (q.limit || 0);
+
+    return `<article class="quota-card ark-card" data-quota="${q.name}" data-provider="ark" role="button" tabindex="0" aria-label="View ${displayName} details" style="animation-delay: ${i * 60}ms">
+      <header class="card-header">
+        <h2 class="quota-title">
+          <svg class="quota-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icon}</svg>
+          ${displayName}
+        </h2>
+        <span class="countdown" id="${countdownId}">${q.timeUntilResetSeconds > 0 ? formatDuration(q.timeUntilResetSeconds) : '--:--'}</span>
+      </header>
+      <div class="progress-stats">
+        <span class="usage-percent" id="${percentId}">${usagePct}%</span>
+        <span class="usage-fraction" id="${fractionId}">${cardLabel}</span>
+      </div>
+      <div class="progress-wrapper">
+        <div class="progress-bar" role="progressbar" aria-valuenow="${Math.round(displayPct)}" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-fill" id="${progressId}" style="width: ${usagePct}%" data-status="${status}"></div>
+        </div>
+      </div>
+      <footer class="card-footer">
+        <span class="status-badge" id="${statusId}" data-status="${status}">
+          <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${statusCfg.icon}"/></svg>
+          ${statusCfg.label}
+        </span>
+        <span class="reset-time" id="${resetId}"${q.resetsAt ? ` data-reset-at="${q.resetsAt}"` : ''}>${q.resetsAt ? formatResetTime(q.resetsAt) : ''}</span>
+      </footer>
+    </article>`;
+  }).join('');
+}
+
+function updateArkCard(quota) {
+  const key = `ark-${quota.name}`;
+  State.currentQuotas[key] = {
+    percent: quota.utilization || 0,
+    used: quota.used || 0,
+    limit: quota.limit || 0,
+    status: quota.status || 'healthy',
+    renewsAt: quota.resetsAt,
+    timeUntilResetSeconds: quota.timeUntilResetSeconds || 0,
+    name: quota.name,
+    displayName: quota.displayName
+  };
+
+  const displayPct = quota.cardPercent != null ? quota.cardPercent : (quota.utilization || 0);
+  const usagePct = displayPct.toFixed(1);
+  const status = quota.status || 'healthy';
+
+  const progressEl = document.getElementById(`progress-ark-${quota.name}`);
+  const percentEl = document.getElementById(`percent-ark-${quota.name}`);
+  const fractionEl = document.getElementById(`fraction-ark-${quota.name}`);
+  const statusEl = document.getElementById(`status-ark-${quota.name}`);
+  const resetEl = document.getElementById(`reset-ark-${quota.name}`);
+  const countdownEl = document.getElementById(`countdown-ark-${quota.name}`);
+
+  if (progressEl) {
+    progressEl.style.width = `${usagePct}%`;
+    progressEl.setAttribute('data-status', status);
+    const bar = progressEl.parentElement;
+    if (bar) bar.setAttribute('aria-valuenow', Math.round(displayPct));
+  }
+  if (percentEl) {
+    percentEl.textContent = `${usagePct}%`;
+  }
+  if (fractionEl) {
+    const cardLabel = quota.format === 'currency' ? '$' + (quota.used || 0).toFixed(2) + ' / $' + (quota.limit || 0).toFixed(2) : (quota.used || 0) + ' / ' + (quota.limit || 0);
+    fractionEl.textContent = cardLabel;
+  }
+  if (statusEl) {
+    const config = statusConfig[status] || statusConfig.healthy;
+    statusEl.setAttribute('data-status', status);
+    statusEl.innerHTML = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${config.icon}"/></svg>${config.label}`;
+  }
+  if (resetEl) {
+    if (quota.resetsAt) {
+      resetEl.setAttribute('data-reset-at', quota.resetsAt);
+      resetEl.textContent = formatResetTime(quota.resetsAt);
+    } else {
+      resetEl.removeAttribute('data-reset-at');
+      resetEl.textContent = '';
+    }
+  }
+  if (countdownEl) {
+    if (quota.timeUntilResetSeconds > 0) {
+      countdownEl.textContent = formatDuration(quota.timeUntilResetSeconds);
+      countdownEl.classList.toggle('imminent', quota.timeUntilResetSeconds < 1800);
+      countdownEl.style.display = '';
+    } else {
+      countdownEl.style.display = 'none';
+    }
+  }
+}
 
 
 async function fetchCurrent() {
@@ -4108,6 +4222,16 @@ async function fetchCurrent() {
           }
         }
 
+      } else if (provider === 'ark') {
+        if (data.quotas) {
+          const container = document.getElementById('quota-grid-ark');
+          if (container && container.children.length === 0) {
+            renderArkQuotaCards(data.quotas, 'quota-grid-ark');
+          }
+          if (Array.isArray(data.quotas) && data.quotas.length > 0) {
+            data.quotas.forEach(q => updateArkCard(q));
+          }
+        }
       } else if (provider === 'zai') {
         updateCard('tokensLimit', data.tokensLimit);
         updateCard('timeLimit', data.timeLimit);
@@ -10563,6 +10687,19 @@ const providerSettingsConfig = {
     fields: [
       { id: 'workspace_id', label: 'Workspace ID', type: 'text', placeholder: 'wrk_...', hint: 'Your OpenCode Go workspace ID. Overrides OPENCODE_GO_WORKSPACE_ID from .env.' },
       { id: 'auth_cookie', label: 'Auth Cookie', type: 'password', placeholder: 'Not configured', hint: 'The auth cookie value required for scraping the dashboard. Overrides OPENCODE_GO_AUTH_COOKIE from .env.', sensitive: true },
+    ],
+  },
+  ark: {
+    title: 'Volcano Ark',
+    desc: 'Configure Volcano Engine Ark quota tracking. Coding Plan uses console cookie (auto-refreshes via CDP); Agent Plan uses Access Key. Changes take effect after daemon restart.',
+    fields: [
+      { id: 'console_cookie', label: 'Coding Plan Cookie', type: 'password', placeholder: 'Not configured', hint: 'Console cookie for Coding Plan (GetCodingPlanUsage). Overrides ARK_CONSOLE_COOKIE from .env. Auto-refreshes via CDP when browser debug port is active.', sensitive: true },
+      { id: 'console_web_id', label: 'Coding Plan Web ID (optional)', type: 'text', placeholder: 'Optional', hint: 'x-web-id header value. Overrides ARK_CONSOLE_WEB_ID from .env.' },
+      { id: 'access_key', label: 'Agent Plan Access Key', type: 'password', placeholder: 'Not configured', hint: 'IAM Access Key for Agent Plan (GetAFPUsage). Overrides ARK_ACCESS_KEY from .env.', sensitive: true },
+      { id: 'secret_key', label: 'Agent Plan Secret Key', type: 'password', placeholder: 'Not configured', hint: 'IAM Secret Key for Agent Plan. Overrides ARK_SECRET_KEY from .env.', sensitive: true },
+      { id: 'region', label: 'Region', type: 'select', options: [
+        { value: 'cn-beijing', text: 'cn-beijing' },
+      ], default: 'cn-beijing', hint: 'Overrides ARK_REGION from .env.' },
     ],
   },
 };

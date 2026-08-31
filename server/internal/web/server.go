@@ -30,12 +30,31 @@ type Server struct {
 	handler        *Handler
 	logger         *slog.Logger
 	port           int
+	mux            *http.ServeMux
+	basePath       string
 	genericHandler *generic.Handler
 }
 
-// SetGenericHandler 注册通用适配器处理器（配置驱动平台）
+// SetGenericHandler 注册通用适配器处理器（配置驱动平台）并挂载路由。
 func (s *Server) SetGenericHandler(h *generic.Handler) {
 	s.genericHandler = h
+	if s.mux == nil || h == nil {
+		return
+	}
+	p := func(path string) string { return s.basePath + path }
+	s.mux.HandleFunc(p("/generic"), h.ConfigPage)
+	s.mux.HandleFunc(p("/api/generic/platforms"), func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			h.UpsertPlatform(w, r)
+		default:
+			h.ListPlatforms(w, r)
+		}
+	})
+	s.mux.HandleFunc(p("/api/generic/platforms/"), h.DeletePlatform)
+	s.mux.HandleFunc(p("/api/generic/metrics"), h.GetMetrics)
+	s.mux.HandleFunc(p("/api/generic/metrics/"), h.GetPlatformMetrics)
+	s.mux.HandleFunc(p("/api/generic/test"), h.TestConnection)
 }
 
 // NewServer creates a new Server instance.
@@ -180,9 +199,11 @@ func NewServer(port int, handler *Handler, logger *slog.Logger, username, passwo
 			WriteTimeout:      60 * time.Second,
 			IdleTimeout:       120 * time.Second,
 		},
-		handler: handler,
-		logger:  logger,
-		port:    port,
+		handler:  handler,
+		logger:   logger,
+		port:     port,
+		mux:      mux,
+		basePath: bp,
 	}
 }
 

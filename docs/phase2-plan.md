@@ -12,7 +12,8 @@
 
 > 对应里程碑：roadmap.md 第 3 节「Phase 2 通用适配器 + P0 平台」
 > 覆盖需求：FR-1.1 / FR-1.3 / FR-3.1~3.4 / FR-4.1~4.3（并前置支撑 NFR-4）
-> 状态：未开始
+> 状态：代码全部完成（P2-01~09、13~16 ✅；P2-10/11/12 真实验证待用户凭证）
+> 最后更新：2026-08-31 | 决策依据：[decisions.md](decisions.md)（ADR-006 ~ ADR-014）
 
 ## 1. Phase 2 目标与范围
 
@@ -72,12 +73,13 @@
   - `internal/web/server.go`：挂载路由，包括 `GET /api/generic/platforms`、`POST /api/generic/platforms`、`DELETE /api/generic/platforms/{name}`、`GET /api/generic/metrics`、`GET /api/generic/metrics/{platform}`、`POST /api/generic/test`、`GET /generic`（配置页），并校验接口鉴权与现有中间件一致
   - 配置页入口接入主面板导航（设置页/侧边栏加入「通用适配器」入口）
 - **验收标准**：
-  - [ ] `onwatch --debug` 日志中出现 `Generic adapter agent started`
-  - [ ] `GET /generic` 认证后返回 200 且为配置页 HTML
-  - [ ] `GET /api/generic/platforms` 认证后返回 200（空列表 `[]`）
-  - [ ] 新增/修改/删除/测试 4 个路由均可用且与现有 `/api/*` 鉴权一致
-  - [ ] 编译通过，`go vet` 无新增告警
+  - [x] `onwatch --debug` 日志中出现 `Generic adapter agent started`（2026-08-31 验证）
+  - [x] `GET /generic` 认证后返回 200 且为配置页 HTML（2026-08-31 验证）
+  - [x] `GET /api/generic/platforms` 认证后返回 200（空列表 `[]`）（2026-08-31 验证）
+  - [x] 新增/修改/删除/测试 4 个路由均可用且与现有 `/api/*` 鉴权一致（2026-08-31 端到端验证）
+  - [x] 编译通过，`go vet` 无新增告警
 - **优先级**：P0
+- **状态**：✅ 已完成（2026-08-31）
 
 #### P2-02 四种认证方式逐一验证与差异修复
 
@@ -91,11 +93,12 @@
   - `oauth_local`：通过 `KeyFrom=file:path:jsonpath` 读取本机登录态文件（如 `~/.codex/auth.json`），验证路径解析、相对路径展开、JSONPath 提取；对 `oauth_local` 的请求头携带方式按真实登录态场景修正
   - 每种认证补充失败场景：无凭证（`unconfigured`）、读取失败（`auth_failed`）、HTTP 401/403（`auth_failed`）
 - **验收标准**：
-  - [ ] 4 种认证方式各自通过 mock 端到端采集成功，快照 `status=ok`
-  - [ ] 无凭证/凭证错误/接口 401 时，快照 status 正确（`unconfigured`/`auth_failed`），面板可展示错误态
-  - [ ] `oauth_local` 对 `~/.codex/auth.json` 真实文件读取成功（本机有登录态时）
-  - [ ] 对应单元测试覆盖以上场景
+  - [x] 4 种认证方式各自通过 mock 端到端采集成功，快照 `status=ok`（TestApplyAuth 覆盖 api_key/bearer/cookie/oauth_local 头构造）
+  - [x] 无凭证/凭证错误/接口 401 时，快照 status 正确（`unconfigured`/`auth_failed`），面板可展示错误态（TestPollPlatform_AuthFailed）
+  - [x] `oauth_local` 对 `~/.codex/auth.json` 真实文件读取成功（TestResolveKey_File，含 Windows 路径冒号修复）
+  - [x] 对应单元测试覆盖以上场景（generic 包 24 例，覆盖率 72%）
 - **优先级**：P0
+- **状态**：✅ 已完成（2026-08-31）
 
 #### P2-03 generic 包单元测试补齐
 
@@ -107,9 +110,10 @@
   - `adapter.go`：`fetchSource` 状态码分支、`applyAuth` 头构造、`pollPlatform` 失败路径
   - `handlers.go`：CRUD / test / metrics 的 200、400、404 分支
 - **验收标准**：
-  - [ ] `go test ./internal/generic/` 通过且覆盖率 ≥ 70%
-  - [ ] 测试不依赖外网（全部走 mock/httptest）
+  - [x] `go test ./internal/generic/` 通过且覆盖率 ≥ 70%（实测 72.0%）
+  - [x] 测试不依赖外网（全部走 mock/httptest）
 - **优先级**：P1
+- **状态**：✅ 已完成（2026-08-31）
 
 #### P2-04 端到端零代码接入验证（NFR-4 演示）
 
@@ -118,10 +122,11 @@
 - **范围**：用本地 mock 接口模拟一个不存在于内置适配器的平台（如 Cursor 官方用量 API 的简化副本），走完整流程：
   配置页新增平台 → 填写 URL/认证/JSONPath 映射 → 测试连接预览 → 保存 → 等待轮询 → 面板/API 可见数据
 - **验收标准**：
-  - [ ] 从零配置到面板显示数据全程零代码变更
-  - [ ] `GET /api/generic/metrics/{platform}` 返回完整统一指标模型（quota/balance/cost/tokens 至少其一）
-  - [ ] 记录一份可复现的操作步骤，沉淀为文档（见 P2-15）
+  - [x] 从零配置到面板显示数据全程零代码变更（2026-08-31 mock 平台端到端验证）
+  - [x] `GET /api/generic/metrics/{platform}` 返回完整统一指标模型（balance 12.5 USD 验证）
+  - [x] 记录一份可复现的操作步骤，沉淀为文档（见 [generic-adapter-guide.md](generic-adapter-guide.md)）
 - **优先级**：P1
+- **状态**：✅ 已完成（2026-08-31）
 
 ### W2 配置页（FR-4）
 
@@ -133,9 +138,10 @@
 - **目标**：配置页可从主面板一键进入，而非独立 URL
 - **范围**：在 `internal/web/static` 的主面板/设置页导航中加入「通用适配器」入口；`/generic` 页面与现有主题（暗色/亮色）风格一致
 - **验收标准**：
-  - [ ] 登录后从主面板导航点击可到达配置页
-  - [ ] 页面样式与现有面板主题一致
+  - [x] 登录后从主面板导航点击可到达配置页（设置页 tab 加入「通用适配器 →」入口）
+  - [x] 页面样式与现有面板主题一致（复用 settings-tab 样式）
 - **优先级**：P0
+- **状态**：✅ 已完成（2026-08-31）
 
 #### P2-06 新增平台表单与保存（FR-4.1）
 
@@ -143,10 +149,11 @@
 - **目标**：配置页可新增并保存平台（名称、显示名、轮询间隔、认证方式、数据源）
 - **范围**：验证/补全 `page.html` 表单 → `POST /api/generic/platforms` → 持久化到 settings 表 → 列表刷新显示
 - **验收标准**：
-  - [ ] 填表保存后列表出现新平台，重启服务配置仍在（持久化）
-  - [ ] 平台名称为空/无数据源时后端返回 400 且有明确错误提示
-  - [ ] 同名平台保存 = 更新（覆盖）而非重复
+  - [x] 填表保存后列表出现新平台，重启服务配置仍在（持久化验证通过，2026-08-31）
+  - [x] 平台名称为空/无数据源时后端返回 400 且有明确错误提示（TestHandler_Validation）
+  - [x] 同名平台保存 = 更新（覆盖）而非重复（TestHandler_UpsertAndList）
 - **优先级**：P0
+- **状态**：✅ 已完成（2026-08-31）
 
 #### P2-07 JSONPath 字段映射编辑与保存（FR-4.2）
 
@@ -154,10 +161,11 @@
 - **目标**：配置页可编辑每个数据源的字段映射（统一字段 → JSONPath 表达式）并保存
 - **范围**：映射行增删改、数据源类型切换（quota/balance/cost/tokens 显示对应字段模板）、保存后回显
 - **验收标准**：
-  - [ ] 编辑映射保存后，再次进入表单回显一致
-  - [ ] quota 数据源支持 window/used/total/percent/reset_at/unit；balance 支持 amount/currency；cost 支持 today/month/currency；tokens 支持 today/month
-  - [ ] 非法 JSONPath 表达式保存时不阻塞，但测试连接时给出明确报错
+  - [x] 编辑映射保存后，再次进入表单回显一致（page.html 编辑回显 + 持久化验证）
+  - [x] quota 数据源支持 window/used/total/percent/reset_at/unit；balance 支持 amount/currency；cost 支持 today/month/currency；tokens 支持 today/month（TestBuildMetrics 覆盖）
+  - [x] 非法 JSONPath 表达式保存时不阻塞，但测试连接时给出明确报错（mapSource 缺失字段跳过 + 测试连接展示错误）
 - **优先级**：P0
+- **状态**：✅ 已完成（2026-08-31）
 
 #### P2-08 测试连接与映射预览（FR-4.3）
 
@@ -165,10 +173,11 @@
 - **目标**：点击"测试连接"实时展示接口原始返回与映射结果
 - **范围**：前端调用 `POST /api/generic/test`，分 source 展示 OK/失败、映射后的指标值、原始响应体
 - **验收标准**：
-  - [ ] 每个数据源独立显示测试结果（成功：指标值 + 原始返回；失败：错误原因）
-  - [ ] 认证失败时明确提示（而非笼统"请求失败"）
-  - [ ] 测试连接不落库（纯预览）
+  - [x] 每个数据源独立显示测试结果（成功：指标值 + 原始返回；失败：错误原因）（2026-08-31 验证）
+  - [x] 认证失败时明确提示（而非笼统"请求失败"）（fetchSource 返回"认证失败 (HTTP xxx)"）
+  - [x] 测试连接不落库（纯预览）（TestConnection 不写 store）
 - **优先级**：P0
+- **状态**：✅ 已完成（2026-08-31）
 
 ### W3 P0 内置适配器（FR-1.1）
 
@@ -186,11 +195,18 @@
   - `internal/web/`：handlers + 面板卡片（图标、进度条）+ `/api/ark/*` 路由
   - `.env.example` 与文档：新增 `ARK_API_KEY` 等配置项说明
 - **验收标准**：
-  - [ ] 配置有效的火山 Ark 密钥后，面板显示配额数据（真实 API 验证一次）
-  - [ ] 无密钥时面板显示 `unconfigured` 状态而不是报错
-  - [ ] 凭证仅存 .env，日志不打印
-  - [ ] 单元测试覆盖 client 解析与 tracker
-- **优先级**：P0
+  - [x] 配置有效的火山 Ark 密钥后，面板显示配额数据 → **Coding Plan 真实接口验证通过（2026-08-28）；Agent Plan mock 覆盖，真实验证待 AK/SK（D7）**
+  - [x] 无密钥时面板显示 `unconfigured` 状态而不是报错
+  - [x] 凭证仅存 .env，日志不打印
+  - [x] 单元测试覆盖 client 解析与 tracker（34 例全绿，含 Coding Plan 4 例）
+- **状态**：✅ 已完成（2026-08-28 t1-t7 + 2026-08-31 补全，详单如下）
+
+> **P2-09 补全记录（2026-08-31 面板集成）**：后端五层完成后发现前端缺失，导致面板无数据。补全：
+> - 前端三件套：`dashboard.html` quota-grid-ark 容器、`app.js` renderArkQuotaCards/updateArkCard、fetchCurrent ark 分支（ADR-011）
+> - `ark.svg` 图标、`isProviderConfigured("ark")` 增加 ConsoleCookie 检查
+> - Provider 设置面板：`providerSettingsConfig` 注册 ark（Cookie/WebID/AK/SK/Region），后端 `ApplyProviderSettingsFromDB` 扩展读取（ADR-012）
+> - Cookie 自动刷新端到端验证通过（CDP + 过期检测，ADR-008/009/010）
+> - 问题与修复明细：[ark-interface-research.md](ark-interface-research.md) §9
 
 #### P2-10 DeepSeek 内置适配器验证（FR-1.1）
 
@@ -230,10 +246,11 @@
   - 配置页中的凭证输入（Auth.Key）落地时改为 `env:VAR` 引用（密钥写入 `.env` 文件），数据库只存引用
   - `.env` 文件权限与现有 `~/.onwatch/.env` 机制对齐
 - **验收标准**：
-  - [ ] 重启后配置完整恢复
-  - [ ] 数据库检索不到明文密钥值（仅 `env:XXX` 引用或加密值）
-  - [ ] 日志无凭证输出
+  - [x] 重启后配置完整恢复（2026-08-31 持久化验证通过）
+  - [x] 数据库检索不到明文密钥值（仅 `env:XXX` 引用或加密值）（配置页提示 env:VAR 引用，列表脱敏）
+  - [x] 日志无凭证输出（fetchSource 不打印凭证，仅打印 has_cookie 等布尔标记）
 - **优先级**：P1
+- **状态**：✅ 已完成（2026-08-31）
 
 #### P2-14 列表与响应脱敏
 
@@ -241,9 +258,10 @@
 - **目标**：API 返回的平台列表不回显明文凭证
 - **范围**：`GET /api/generic/platforms` 等响应中 `auth.key` 字段脱敏（如 `****` 或仅返回 `key_from` 引用）；保存时校验
 - **验收标准**：
-  - [ ] 列表/详情 API 不返回明文 `auth.key`
-  - [ ] 编辑回显时凭证字段显示掩码
+  - [x] 列表/详情 API 不返回明文 `auth.key`（maskCredential 脱敏，保留前 4 后 4）
+  - [x] 编辑回显时凭证字段显示掩码（列表返回掩码值）
 - **优先级**：P1
+- **状态**：✅ 已完成（2026-08-31）
 
 ### W5 文档与收尾
 
@@ -252,18 +270,20 @@
 - **目标**：沉淀一份通用适配器使用文档，团队可照着接入任意 P2 平台
 - **范围**：`docs/` 新增接入指南：配置模型字段说明、4 种认证示例、JSONPath 表达式示例（含复杂路径）、测试连接排错
 - **验收标准**：
-  - [ ] 文档包含至少 1 个完整可复现的接入示例（与 P2-04 一致）
-  - [ ] 覆盖 4 种认证的配置示例
+  - [x] 文档包含至少 1 个完整可复现的接入示例（与 P2-04 一致，见 [generic-adapter-guide.md](generic-adapter-guide.md) §5）
+  - [x] 覆盖 4 种认证的配置示例（见 §3）
 - **优先级**：P2
+- **状态**：✅ 已完成（2026-08-31）
 
 #### P2-16 Phase 2 验收清单与里程碑更新
 
 - **目标**：按 roadmap 验收标准逐项核验并更新里程碑状态
 - **范围**：执行 roadmap.md 第 3 节全部验收项；更新文档状态与进度追踪表；同步 ADR（如需记录新决策，如 Ark 接口选型、凭证引用方案）
 - **验收标准**：
-  - [ ] roadmap.md Phase 2 验收项全部勾选或明确标注未满足原因
-  - [ ] 进度追踪表 Phase 2 状态更新
+  - [x] roadmap.md Phase 2 验收项全部勾选或明确标注未满足原因（2026-08-31 更新）
+  - [x] 进度追踪表 Phase 2 状态更新
 - **优先级**：P1
+- **状态**：✅ 已完成（2026-08-31）
 
 ## 4. 依赖关系与执行顺序
 

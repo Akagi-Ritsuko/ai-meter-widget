@@ -52,6 +52,11 @@ type Config struct {
 	ArkSecretKey string // ARK_SECRET_KEY
 	ArkRegion    string // ARK_REGION (default: cn-beijing)
 	ArkBaseURL   string // ARK_BASE_URL (default: https://ark.cn-beijing.volcengineapi.com)
+	// Volcano Ark Coding Plan (console internal API, cookie auth)
+	ArkConsoleCookie    string // ARK_CONSOLE_COOKIE (控制台 Cookie，含 csrfToken)
+	ArkConsoleWebID     string // ARK_CONSOLE_WEB_ID (x-web-id 请求头)
+	ArkConsoleCSRFToken string // ARK_CONSOLE_CSRF_TOKEN (x-csrf-token，可选，默认从 Cookie 提取)
+	ArkCDPDebugURL      string // ARK_CDP_DEBUG_URL (浏览器调试端口，默认 http://localhost:9222)
 	CodexShowAvailable string // CODEX_SHOW_AVAILABLE: "usage" | "available", default "usage" (Codex-specific override)
 	CodexAutoStart5h   bool   // CODEX_AUTO_START_5H: auto-send a starter ping when the 5h window resets (Beta, default off)
 	CodexAutoStart7d   bool   // CODEX_AUTO_START_7D: auto-send a starter ping when the weekly window resets (Beta, default off)
@@ -354,6 +359,11 @@ func loadFromEnvAndFlags(flags *flagValues) (*Config, error) {
 		cfg.ArkRegion = "cn-beijing"
 	}
 	cfg.ArkBaseURL = strings.TrimSpace(os.Getenv("ARK_BASE_URL"))
+	// Volcano Ark Coding Plan (console internal API, cookie auth)
+	cfg.ArkConsoleCookie = strings.TrimSpace(os.Getenv("ARK_CONSOLE_COOKIE"))
+	cfg.ArkConsoleWebID = strings.TrimSpace(os.Getenv("ARK_CONSOLE_WEB_ID"))
+	cfg.ArkConsoleCSRFToken = strings.TrimSpace(os.Getenv("ARK_CONSOLE_CSRF_TOKEN"))
+	cfg.ArkCDPDebugURL = strings.TrimSpace(os.Getenv("ARK_CDP_DEBUG_URL"))
 	// Codex auto quota-starter (Beta): default off; the dashboard toggle in
 	// provider_settings overrides these env-provided defaults at runtime.
 	cfg.CodexAutoStart5h = os.Getenv("CODEX_AUTO_START_5H") == "true"
@@ -739,7 +749,7 @@ func (c *Config) AvailableProviders() []string {
 	if c.OpenCodeGoWorkspaceID != "" && c.OpenCodeGoAuthCookie != "" {
 		providers = append(providers, "opencode")
 	}
-	if c.ArkAccessKey != "" && c.ArkSecretKey != "" {
+	if (c.ArkAccessKey != "" && c.ArkSecretKey != "") || c.ArkConsoleCookie != "" {
 		providers = append(providers, "ark")
 	}
 	return providers
@@ -779,7 +789,8 @@ func (c *Config) HasProvider(name string) bool {
 	case "opencode":
 		return c.OpenCodeGoWorkspaceID != "" && c.OpenCodeGoAuthCookie != ""
 	case "ark":
-		return c.ArkAccessKey != "" && c.ArkSecretKey != ""
+		// Agent Plan 用 AK/SK，Coding Plan 用控制台 Cookie，任一配置即启用
+		return (c.ArkAccessKey != "" && c.ArkSecretKey != "") || c.ArkConsoleCookie != ""
 	}
 	return false
 }
@@ -832,7 +843,7 @@ func (c *Config) HasMultipleProviders() bool {
 	if c.OpenCodeGoWorkspaceID != "" && c.OpenCodeGoAuthCookie != "" {
 		count++
 	}
-	if c.ArkAccessKey != "" && c.ArkSecretKey != "" {
+	if (c.ArkAccessKey != "" && c.ArkSecretKey != "") || c.ArkConsoleCookie != "" {
 		count++
 	}
 	return count > 1

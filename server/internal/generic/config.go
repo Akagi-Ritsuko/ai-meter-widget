@@ -119,12 +119,17 @@ func (a AuthConfig) ResolveKey() (string, error) {
 
 	case strings.HasPrefix(a.KeyFrom, "file:"):
 		// 格式: file:path:jsonpath
-		parts := strings.SplitN(a.KeyFrom, ":", 3)
-		if len(parts) < 3 {
+		// 注意：Windows 路径含冒号（如 C:\...），需从右侧找最后一个冒号作为 jsonpath 分隔符
+		rest := strings.TrimPrefix(a.KeyFrom, "file:")
+		idx := strings.LastIndex(rest, ":")
+		if idx < 0 {
 			return "", fmt.Errorf("generic: file: 格式应为 file:path:jsonpath，实际: %s", a.KeyFrom)
 		}
-		path := parts[1]
-		expr := parts[2]
+		path := rest[:idx]
+		expr := rest[idx+1:]
+		if path == "" || expr == "" {
+			return "", fmt.Errorf("generic: file: 格式应为 file:path:jsonpath，实际: %s", a.KeyFrom)
+		}
 		if !filepath.IsAbs(path) {
 			home, err := os.UserHomeDir()
 			if err != nil {

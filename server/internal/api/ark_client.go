@@ -57,9 +57,13 @@ type ArkClient struct {
 type ArkClientOption func(*ArkClient)
 
 // WithArkBaseURL sets a custom base URL (for testing or proxies).
+// 仅当传入非空值时覆盖默认值，避免空字符串清空默认端点。
 func WithArkBaseURL(baseURL string) ArkClientOption {
 	return func(c *ArkClient) {
-		c.baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+		baseURL = strings.TrimSpace(baseURL)
+		if baseURL != "" {
+			c.baseURL = strings.TrimRight(baseURL, "/")
+		}
 	}
 }
 

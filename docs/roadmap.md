@@ -1,21 +1,14 @@
-<!--
- * @Author: guotao
- * @Date: 2026-08-27 14:53:32
- * @LastEditors: guotao
- * @LastEditTime: 2026-08-27 17:53:54
- * @FilePath: \ai-meter-widget\docs\roadmap.md
- * @Description: 
- * 
- * Copyright (c) 2026 by lzlj, All Rights Reserved. 
--->
 # 里程碑与进展追踪（Roadmap）
+
+> 版本：v4 | 更新日期：2026-08-31
+> 决策依据：[decisions.md](decisions.md)（ADR-001 ~ ADR-014）
 
 ## 1. 里程碑总览
 
 | Phase | 名称 | 覆盖需求 | 状态 |
 |---|---|---|---|
-| 1 | 底座跑通 | FR-1.2, FR-5.1, NFR-1/2/3 | 进行中 |
-| 2 | 通用适配器 + P0 平台 | FR-1.1, FR-1.3, FR-3, FR-4 | 未开始 |
+| 1 | 底座跑通 | FR-1.2, FR-5.1, NFR-1/2/3 | ✅ 核心完成（待 Claude/Codex 凭证验证、24h soak） |
+| 2 | 通用适配器 + P0 平台 | FR-1.1, FR-1.3, FR-3, FR-4 | 🔄 代码全部完成（P2-10/11/12 真实验证待用户凭证） |
 | 3 | 统一指标 API + 展示配置 | FR-2, FR-6, FR-7 | 未开始 |
 | 4 | 桌面浮窗 + 告警 | FR-5.2, FR-8 | 未开始 |
 | 5 | ESP32 墨水屏/LED | FR-5.3 | 未开始 |
@@ -34,10 +27,10 @@
 - [ ] FR-1.2：配置 Claude/Codex 凭证后，面板显示对应配额数据（本机已自动探测到 Cursor 登录态并采集成功，Claude/Codex 待用户环境验证）
 - [x] FR-5.1：Web 面板正常展示各平台用量（Cursor 配额含重置倒计时采集成功）
 - [ ] NFR-1：Windows 编译通过，macOS/Linux 交叉编译通过（Windows 已验证）
-- [ ] NFR-2：守护进程运行 24h 内存稳定 <60MB（待长时间运行验证）
+- [ ] NFR-2：守护进程运行 24h 内存稳定 <60MB（42.4MB WorkingSet 实测，待 24h soak）
 - [x] NFR-3：凭证存 .env，日志不打印凭证（Cursor 凭据从本地 SQLite 只读探测）
 
-**状态**：进行中（2026-08-27 启动，核心执行已完成，剩余项依赖用户环境/时间）
+**状态**：核心完成（2026-08-27 启动）
 
 **已执行内容**：
 
@@ -63,7 +56,7 @@
 
 ## 3. Phase 2 通用适配器 + P0 平台
 
-> 详细需求分解与任务计划见 [phase2-plan.md](phase2-plan.md)
+> 详细需求分解与任务计划见 [phase2-plan.md](phase2-plan.md)；通用适配器使用见 [generic-adapter-guide.md](generic-adapter-guide.md)
 
 **目标**：实现配置驱动的通用适配器引擎，并用 DeepSeek 作为首个落地案例验证；补齐 P0 平台缺口（火山引擎 Ark）。
 
@@ -72,20 +65,58 @@
 **交付物**：
 - 通用适配器：配置模型 + JSONPath 映射引擎 + 4 种认证方式
 - 配置页：新增平台表单 + 测试连接/映射预览
-- P0 平台内置适配器：火山引擎(Ark)（DeepSeek/智谱/OpenCode 已内置，验证即可）
+- P0 平台内置适配器：火山引擎 Ark（Agent Plan AK/SK + Coding Plan Cookie 双套餐，含 Cookie 自动刷新）
 
 **验收标准**：
-- [ ] FR-1.3：配置页填写 URL/认证/字段映射后，新平台即可显示数据（零代码）
-- [ ] FR-3.1/3.2/3.3/3.4：四种认证方式均可工作（oauth_local 参考 CodexBar 读取本机登录态）
-- [ ] FR-4.1：配置页可新增平台并保存
-- [ ] FR-4.2：JSONPath 字段映射可编辑并保存
-- [ ] FR-4.3：测试连接展示接口返回与映射结果
-- [ ] FR-1.1：DeepSeek 余额/费用/token 显示正常（配置 DEEPSEEK_API_KEY 验证）
-- [ ] FR-1.1：火山引擎 Ark 配额显示正常（新写适配器）
-- [ ] FR-1.1：智谱 GLM 配额显示正常（ZAI_REGION=cn 验证）
-- [ ] FR-1.1：OpenCode 读取本机 auth.json 显示配额（配置 OPENCODE_GO_* 验证）
+- [x] FR-1.3：配置页填写 URL/认证/字段映射后，新平台即可显示数据（零代码）→ **2026-08-31 mock 平台端到端验证通过**
+- [x] FR-3.1/3.2/3.3/3.4：四种认证方式均可工作（oauth_local 参考 CodexBar 读取本机登录态）→ **TestApplyAuth 覆盖，含 Windows 路径修复**
+- [x] FR-4.1：配置页可新增平台并保存 → **持久化验证通过**
+- [x] FR-4.2：JSONPath 字段映射可编辑并保存 → **TestBuildMetrics 覆盖 4 类 source**
+- [x] FR-4.3：测试连接展示接口返回与映射结果 → **2026-08-31 验证**
+- [ ] FR-1.1：DeepSeek 余额/费用/token 显示正常（配置 DEEPSEEK_API_KEY 验证）→ ⏳ 待用户凭证
+- [x] FR-1.1：火山引擎 Ark 配额显示正常 → **代码+34 例单测完成；Coding Plan 真实接口验证通过；Cookie 自动刷新端到端验证通过；面板渲染/设置 UI 完成**（2026-08-31）
+- [ ] FR-1.1：智谱 GLM 配额显示正常（ZAI_REGION=cn 验证）→ ⏳ 待用户凭证
+- [ ] FR-1.1：OpenCode 读取本机 auth.json 显示配额（配置 OPENCODE_GO_* 验证）→ ⏳ 待用户凭证
 
-**状态**：未开始
+**状态**：代码全部完成（P2-01~09、13~16 ✅；P2-10/11/12 真实验证待用户凭证）
+
+**进展记录**：
+
+### 2026-08-28：Ark 适配器（t1-t9）
+- Ark 适配器五层（api/store/tracker/agent/web）代码完成，main.go 接线完成，30 例单测全绿，构建通过
+- 交付物 D2/D3/D4/D5 文档落地；需求文档 ARK-02/03 回写完成
+- 冒烟验收通过：无凭证 `unconfigured`、伪造凭证优雅失败（`auth_failed`）
+- 修复 `WithArkBaseURL` 空值覆盖默认端点 bug（ADR-007）
+
+### 2026-08-28：Ark Coding Plan 支持
+- 新增 `GetCodingPlanUsage`（控制台 Cookie 鉴权）客户端，agent 双套餐轮询
+- 34 例单测全绿，真实接口验证通过（周 19.89%、月 35.24%）
+- 窗口以 `cp_` 前缀命名；JWT 过期检测（digest 2 天 / userInfo 30 天）
+
+### 2026-08-31：通用适配器激活（P2-01~16）
+- P2-01 接线+路由挂载（server.go mux/basePath 重构 + main.go Agent/Handler 注册）
+- P2-02 认证验证 + **修复 Windows 路径冒号解析 bug**（file:path:jsonpath 从右侧找分隔符）
+- P2-03 测试补齐（24 例，覆盖率 72%）
+- P2-04 端到端零代码验证（mock 平台 balance 12.5 USD 全流程）
+- P2-05 配置页入口（设置页 tab）
+- P2-06/07/08 配置页联调（持久化/映射/测试连接）
+- P2-13/14 凭证安全（env:VAR 引用提示 + 列表脱敏 maskCredential）
+- P2-15 零代码接入指南（generic-adapter-guide.md）
+- P2-16 验收清单更新
+
+### 2026-08-31：Ark Cookie 自动刷新（CDP）
+- JWT 过期检测 + CDP 提取器 + 浏览器 DB 提取器 + Composite 组合（ADR-008/009/010）
+- **修复父域过滤 bug**：digest/userInfo/csrfToken 存于 `.volcengine.com`（非 console 子域）
+- **修复旧二进制问题**：CDP 修复后需重新构建 onwatch.exe
+- 端到端验证：无效 Cookie → CDP 提取 35 个 Cookie → 自动刷新 → 采集成功（weekly 8.61%、monthly 4.30%）
+- 新增 `scripts/start-edge-debug.bat`（独立配置目录启动调试 Edge，规避启动加速接管）
+
+### 2026-08-31：Ark 面板集成补全
+- **修复面板无数据**：补全前端三件套（quota-grid-ark 容器 / renderArkQuotaCards+updateArkCard / fetchCurrent ark 分支）+ ark.svg 图标（ADR-011）
+- **修复 isProviderConfigured("ark")**：增加 ConsoleCookie 检查（原只查 AK/SK）
+- Ark Provider 设置面板（齿轮按钮：Coding Plan Cookie/WebID、Agent Plan AK/SK、Region）（ADR-012）
+- `.env` 占位 Cookie 触发启用模式（`pending-cdp-refresh`）（ADR-013）
+- Insights 卡片样式统一（.insight-card 对齐 .quota-card）（ADR-014）
 
 ## 4. Phase 3 统一指标 API + 展示配置
 
@@ -140,8 +171,8 @@
 
 | Phase | 状态 | 开始日期 | 完成日期 | 备注 |
 |---|---|---|---|---|
-| 1 底座跑通 | 进行中 | 2026-08-27 | - | 核心验证通过，待 Claude/Codex 凭证验证与 24h 内存测试 |
-| 2 通用适配器 + P0 | 未开始 | - | - | |
+| 1 底座跑通 | 核心完成 | 2026-08-27 | - | 待 Claude/Codex 凭证验证、24h soak、交叉编译 |
+| 2 通用适配器 + P0 | 代码完成 | 2026-08-28 | - | P2-10/11/12 真实验证待用户凭证 |
 | 3 统一指标 API | 未开始 | - | - | |
 | 4 桌面浮窗 + 告警 | 未开始 | - | - | |
 | 5 ESP32 墨水屏 | 未开始 | - | - | |

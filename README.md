@@ -86,6 +86,7 @@ CODEX_TOKEN=xxx                  # Codex（可自动探测 ~/.codex/auth.json）
 | [docs/architecture.md](docs/architecture.md) | 架构设计与统一指标模型 |
 | [docs/roadmap.md](docs/roadmap.md) | 里程碑计划与进展追踪 |
 | [docs/decisions.md](docs/decisions.md) | 关键决策记录（ADR） |
+| [docs/generic-adapter-guide.md](docs/generic-adapter-guide.md) | 通用适配器零代码接入指南 |
 
 ## License
 

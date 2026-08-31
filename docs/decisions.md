@@ -2,6 +2,17 @@
 
 记录项目关键决策及其背景，便于追溯"为什么这么做"。
 
+> 版本：v3 | 更新日期：2026-08-31
+> 变更摘要：新增 ADR-006 ~ ADR-014（火山引擎 Coding Plan、Cookie 自动刷新、Ark 前端渲染、Insights 样式统一）
+
+## 目录
+
+- [ADR-001](#adr-001fork-onwatch-作为聚合服务底座) ~ [ADR-005](#adr-005p0-平台实现方式调整)：底座与 Phase 1 决策（2026-08-27）
+- [ADR-006](#adr-006火山引擎-coding-plan-采用控制台-cookie-鉴权) ~ [ADR-010](#adr-010cookie-自动刷新采用-cdp--浏览器-db-组合提取)：Ark 适配器核心决策（2026-08-28）
+- [ADR-011](#adr-011ark-前端渲染补全) ~ [ADR-014](#adr-014insights-卡片样式统一)：面板集成与样式决策（2026-08-31）
+
+---
+
 ## ADR-001：Fork onWatch 作为聚合服务底座
 
 - **日期**：2026-08-27
@@ -44,3 +55,94 @@
 - **决策**：Phase 1 发现 onWatch 已内置 DeepSeek / OpenCode Go / Z.ai(cn=智谱)，仅火山引擎 Ark 需新写。
 - **理由**：避免重复造轮子，P0 工作量从 4 个适配器缩减为 1 个。
 - **影响**：Phase 2 交付物调整为"通用适配器引擎 + 火山引擎 Ark 适配器 + 其余 P0 平台验证"。
+
+---
+
+## ADR-006：火山引擎 Coding Plan 采用控制台 Cookie 鉴权
+
+- **日期**：2026-08-28
+- **状态**：已采纳
+- **背景**：用户实际订阅为 Coding Plan（个人版），其查询接口 `GetCodingPlanUsage` 为控制台内部接口，仅支持浏览器 Cookie 鉴权（无 OpenAPI）。
+- **决策**：新增 `ArkCodingPlanClient`（Cookie + x-csrf-token 鉴权），与 Agent Plan（AK/SK）并存，agent 双套餐轮询；Coding Plan 窗口以 `cp_` 前缀命名（cp_session/cp_weekly/cp_monthly）。
+- **理由**：Coding Plan 是用户实际使用的套餐；百分比制（Percent+Cap）与 Agent Plan 的 used/limit 制通过统一 ArkSnapshot 归一化。
+- **依据**：真实接口验证（2026-08-28）+ [ArkCodingPlanUsage](https://github.com/xiaokaiyyy/ArkCodingPlanUsage) 参考实现。
+- **详情**：见 [ark-interface-research.md](ark-interface-research.md) §7。
+
+## ADR-007：withArkBaseURL 空值保护
+
+- **日期**：2026-08-28
+- **状态**：已采纳
+- **背景**：冒烟测试发现 `WithArkBaseURL("")` 把默认端点清空，导致请求发到 `?Action=GetAFPUsage` 无主机地址。
+- **决策**：`WithArkBaseURL` 仅在传入非空值时覆盖默认值。
+- **理由**：config 中 `ARK_BASE_URL` 为可选字段，空值传入是常态而非异常。
+
+## ADR-008：Cookie 过期预警与自动刷新双机制
+
+- **日期**：2026-08-31
+- **状态**：已采纳
+- **背景**：Coding Plan Cookie 中 `digest` JWT 仅 2 天有效，`userInfo` 30 天，手动刷新不可持续。
+- **决策**：两层机制——①过期预警：解析 JWT exp，剩余 <3 天时日志告警；②自动刷新：Cookie 快过期（<1 天）或 401 时触发提取器刷新。
+- **理由**：预警保证可见性，自动刷新减少手动操作；实测无法绕过"30 天内至少访问一次控制台"的前提（无官方 refresh token 接口）。
+
+## ADR-009：Cookie 提取器接口化（CDP + 浏览器 DB 组合）
+
+- **日期**：2026-08-31
+- **状态**：已采纳
+- **背景**：Windows 上浏览器运行时 Cookie 文件被独占锁定（实测 robocopy /B 也无法绕过），浏览器 DB 提取只在浏览器关闭时可用；用户选择 CDP 方案实现真正自动。
+- **决策**：定义 `CookieExtractor` 接口，实现 `CDPCookieExtractor`（浏览器运行时，需 `--remote-debugging-port`）与 `BrowserCookieExtractor`（DPAPI+SQLite，浏览器关闭时），由 `CompositeCookieExtractor` 按 CDP→DB 顺序组合。
+- **理由**：组合覆盖两种浏览器状态；接口化便于后续扩展（如 macOS keychain）。
+- **代价**：CDP 需要用户用调试脚本启动浏览器（独立配置目录避免启动加速接管）。
+
+## ADR-010：Cookie 自动刷新采用 CDP + 浏览器 DB 组合提取
+
+- **日期**：2026-08-31
+- **状态**：已采纳（ADR-009 的实现落地）
+- **背景**：同 ADR-009。
+- **决策**：main.go 中 `SetCookieExtractor(NewCompositeCookieExtractor(CDP, BrowserDB))`；提取触发条件为 `lastAuthFailed || Cookie 解析失败 || 剩余 <1 天`。
+- **端到端验证**（2026-08-31）：无效 Cookie 启动 → CDP 提取 35 个 Cookie → 自动刷新 → 采集成功（weekly 8.61%、monthly 4.30%）。
+- **关键坑**：digest/userInfo/csrfToken 存储在**父域 `.volcengine.com`**，CDP 过滤条件必须匹配 `volcengine.com`（最初只匹配 `console.volcengine.com` 导致提取缺关键 Cookie）；x-web-id 实测非必需。
+
+## ADR-011：Ark 前端渲染补全
+
+- **日期**：2026-08-31
+- **状态**：已采纳
+- **背景**：Ark 适配器后端完成但面板无数据——前端缺失三件套：`quota-grid-ark` 容器、`renderArkQuotaCards/updateArkCard` 渲染函数、`fetchCurrent` 的 ark 分支，导致 Ark 标签页空白、last-updated 不更新。
+- **决策**：镜像 OpenCode 的渲染模式补全三件套 + 新增 `ark.svg` 图标；`isProviderConfigured("ark")` 同时检查 AK/SK 与 ConsoleCookie（任一即配置）。
+- **教训**：新增内置 provider 时，后端五层（api/store/tracker/agent/web handlers）之外，必须同步检查前端四件（容器/渲染/更新/fetch 分支）与图标。
+- **影响文件**：dashboard.html / app.js / handlers.go / icons/ark.svg
+
+## ADR-012：Ark Provider 设置面板接入 UI
+
+- **日期**：2026-08-31
+- **状态**：已采纳
+- **背景**：Provider Controls 中 Volcano Ark 只有 Telemetry/Dashboard 开关，无凭证配置入口（其他 provider 如 Copilot/Z.ai 有齿轮按钮）。
+- **决策**：前端 `providerSettingsConfig` 注册 ark（Coding Plan Cookie/WebID、Agent Plan AK/SK、Region 五字段）；后端 `ApplyProviderSettingsFromDB` 扩展读取 console_cookie/console_web_id/console_csrf_token。
+- **理由**：与现有 provider 设置机制一致，用户可在面板配置凭证，无需手改 .env。
+
+## ADR-013：Cookie 占位值触发启用模式
+
+- **日期**：2026-08-31
+- **状态**：已采纳
+- **背景**：用户不想手动复制长 Cookie；CDP 激活时可以全自动。
+- **决策**：`.env` 配置 `ARK_CONSOLE_COOKIE=pending-cdp-refresh` 占位值触发 provider 启用，运行时 CDP 自动提取真实 Cookie 替换。
+- **理由**：把"配置凭证"简化为"启动调试浏览器"，配合 ADR-010 实现全自动。
+- **前提**：CDP 调试 Edge 需运行（`scripts/start-edge-debug.bat`）。
+
+## ADR-014：Insights 卡片样式统一
+
+- **日期**：2026-08-31
+- **状态**：已采纳
+- **背景**：Usage Insights 的 insight-card 与配额卡片 quota-card 视觉不一致（小圆角/无边框阴影/紧凑内边距）。
+- **决策**：`.insight-card` 基础样式对齐 `.quota-card`（radius-lg / 22px padding / shadow-card / border-default；hover 同升起效果）；severity 着色保留（mix 到 surface-card）。
+- **理由**：统一视觉语言，降低维护成本。
+
+---
+
+## 附：技术债与已知问题
+
+| # | 问题 | 状态 | 说明 |
+|---|---|---|---|
+| 1 | `extra_coverage_test.go` Windows 编译失败（引用仅 `!windows` 定义的 `getCredentialsFilePath`） | 既有，未修 | 测试时临时移开该文件；修复方向：补 Windows 实现或改用 `USERPROFILE` |
+| 2 | web/agent 包部分测试 Windows 失败（`os.UserHomeDir()` 不受 HOME env 影响） | 既有，未修 | Q8；与本项目改动无关 |
+| 3 | config 包测试沙箱环境失败（TempDir 指向 C:\Windows 被拒） | 环境限制 | 真实环境正常 |
+| 4 | CDP 依赖调试浏览器运行 | 设计约束 | 用户需保持 start-edge-debug.bat 启动的 Edge 运行；后续可探索后台无头模式 |

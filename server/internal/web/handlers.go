@@ -1204,7 +1204,16 @@ func (h *Handler) isProviderConfigured(provider string) bool {
 	case "opencode":
 		return h.config != nil && strings.TrimSpace(h.config.OpenCodeGoWorkspaceID) != "" && strings.TrimSpace(h.config.OpenCodeGoAuthCookie) != ""
 	case "ark":
-		return h.config != nil && strings.TrimSpace(h.config.ArkAccessKey) != "" && strings.TrimSpace(h.config.ArkSecretKey) != ""
+		// Agent Plan 用 AK/SK，Coding Plan 用控制台 Cookie，任一配置即视为已配置
+		if h.config != nil {
+			if strings.TrimSpace(h.config.ArkAccessKey) != "" && strings.TrimSpace(h.config.ArkSecretKey) != "" {
+				return true
+			}
+			if strings.TrimSpace(h.config.ArkConsoleCookie) != "" {
+				return true
+			}
+		}
+		return false
 	default:
 		return false
 	}
@@ -1575,6 +1584,16 @@ func ApplyProviderSettingsFromDB(st *store.Store, cfg *config.Config, logger *sl
 		}
 		if region, _ := s["region"].(string); region != "" {
 			cfg.ArkRegion = region
+		}
+		// Coding Plan（控制台 Cookie 鉴权）
+		if cookie, _ := s["console_cookie"].(string); cookie != "" {
+			cfg.ArkConsoleCookie = cookie
+		}
+		if webID, _ := s["console_web_id"].(string); webID != "" {
+			cfg.ArkConsoleWebID = webID
+		}
+		if csrf, _ := s["console_csrf_token"].(string); csrf != "" {
+			cfg.ArkConsoleCSRFToken = csrf
 		}
 	}
 

@@ -13,16 +13,18 @@ import (
 )
 
 // ArkAgent manages the background polling loop for Volcano Engine Ark
-// (GetAFPUsage) quota tracking.
+// quota tracking. It polls both Agent Plan (GetAFPUsage, AK/SK auth) and
+// Coding Plan (GetCodingPlanUsage, console cookie auth) when configured.
 type ArkAgent struct {
-	client       *api.ArkClient
-	store        *store.Store
-	tracker      *tracker.ArkTracker
-	interval     time.Duration
-	logger       *slog.Logger
-	sm           *SessionManager
-	notifier     *notify.NotificationEngine
-	pollingCheck func() bool
+	client           *api.ArkClient
+	codingPlanClient *api.ArkCodingPlanClient
+	store            *store.Store
+	tracker          *tracker.ArkTracker
+	interval         time.Duration
+	logger           *slog.Logger
+	sm               *SessionManager
+	notifier         *notify.NotificationEngine
+	pollingCheck     func() bool
 }
 
 // SetPollingCheck sets a function that is called before each poll.
@@ -34,6 +36,11 @@ func (a *ArkAgent) SetPollingCheck(fn func() bool) {
 // SetNotifier sets the notification engine for sending alerts.
 func (a *ArkAgent) SetNotifier(n *notify.NotificationEngine) {
 	a.notifier = n
+}
+
+// SetCodingPlanClient 设置 Coding Plan 客户端（控制台 Cookie 鉴权）。
+func (a *ArkAgent) SetCodingPlanClient(c *api.ArkCodingPlanClient) {
+	a.codingPlanClient = c
 }
 
 // NewArkAgent creates a new ArkAgent with the given dependencies.
@@ -82,25 +89,52 @@ func (a *ArkAgent) Run(ctx context.Context) error {
 	}
 }
 
-// poll performs a single Ark poll cycle: fetch usage, store snapshot,
-// update tracker and fire notifications.
+// poll performs a single Ark poll cycle: fetch usage from configured
+// plan clients (Agent Plan + Coding Plan), store snapshots, update tracker
+// and fire notifications.
 func (a *ArkAgent) poll(ctx context.Context) {
-	if a.client == nil {
+	if a.client == nil && a.codingPlanClient == nil {
 		return
 	}
 	if a.pollingCheck != nil && !a.pollingCheck() {
 		return // polling disabled for this provider
 	}
 
-	snapshot, err := a.client.FetchUsage(ctx)
-	if err != nil {
-		if ctx.Err() != nil {
-			return
+	// Agent Plan（AK/SK 鉴权）
+	if a.client != nil {
+		snapshot, err := a.client.FetchUsage(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			a.logger.Error("Failed to fetch Ark Agent Plan usage", "error", err)
+		} else {
+			a.processSnapshot(snapshot)
 		}
-		a.logger.Error("Failed to fetch Ark usage", "error", err)
-		return
 	}
 
+	// Coding Plan（控制台 Cookie 鉴权）
+	if a.codingPlanClient != nil {
+		// Cookie 过期预警
+		if days := a.codingPlanClient.CookieDaysRemaining(); days >= 0 && days < 3 {
+			a.logger.Warn("Ark Coding Plan Cookie 即将过期，请访问控制台刷新（或依赖浏览器自动提取）",
+				"days_remaining", days)
+		}
+
+		resp, err := a.codingPlanClient.FetchUsage(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			a.logger.Error("Failed to fetch Ark Coding Plan usage", "error", err)
+		} else {
+			a.processSnapshot(resp.ToSnapshot(time.Now().UTC()))
+		}
+	}
+}
+
+// processSnapshot 将单个快照写入存储、更新 tracker、触发通知与会话上报。
+func (a *ArkAgent) processSnapshot(snapshot *api.ArkSnapshot) {
 	if _, err := a.store.InsertArkSnapshot(snapshot); err != nil {
 		a.logger.Error("Failed to insert Ark snapshot", "error", err)
 		return

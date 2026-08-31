@@ -66,6 +66,7 @@ button:hover { opacity:.9; }
   </div>
 
   <h2 style="margin-top:20px">认证方式</h2>
+  <div class="sub">安全提示：凭证建议用 <code>env:VAR</code> 引用（密钥写入 .env，数据库只存引用），避免明文入库。</div>
   <div class="row">
     <div class="field"><label>类型</label>
       <select id="fAuthType">
@@ -77,8 +78,8 @@ button:hover { opacity:.9; }
       </select>
     </div>
     <div class="field"><label>请求头名称（默认 Authorization）</label><input id="fAuthHeader" placeholder="Authorization"></div>
-    <div class="field"><label>凭证值（直接填写）</label><input id="fAuthKey" placeholder="sk-xxx 或留空"></div>
-    <div class="field"><label>凭证来源（env:VAR 或 file:path:jsonpath）</label><input id="fAuthKeyFrom" placeholder="env:MY_KEY 或 file:~/.xxx/auth.json:$.token"></div>
+    <div class="field"><label>凭证值（直接填写，列表会脱敏）</label><input id="fAuthKey" placeholder="sk-xxx 或留空"></div>
+    <div class="field"><label>凭证来源（推荐：env:VAR 或 file:path:jsonpath）</label><input id="fAuthKeyFrom" placeholder="env:MY_KEY 或 file:~/.xxx/auth.json:$.token"></div>
   </div>
 
   <h2 style="margin-top:20px">数据源</h2>

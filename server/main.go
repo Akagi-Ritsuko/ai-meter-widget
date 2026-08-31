@@ -25,6 +25,7 @@ import (
 	"github.com/onllm-dev/onwatch/v2/internal/agent"
 	"github.com/onllm-dev/onwatch/v2/internal/api"
 	"github.com/onllm-dev/onwatch/v2/internal/config"
+	"github.com/onllm-dev/onwatch/v2/internal/generic"
 	"github.com/onllm-dev/onwatch/v2/internal/menubar"
 	"github.com/onllm-dev/onwatch/v2/internal/notify"
 	"github.com/onllm-dev/onwatch/v2/internal/service"
@@ -982,6 +983,23 @@ func run() error {
 		logger.Info("DeepSeek API client configured")
 	}
 
+	var arkClient *api.ArkClient
+	if cfg.HasProvider("ark") && cfg.ArkAccessKey != "" && cfg.ArkSecretKey != "" {
+		arkClient = api.NewArkClient(cfg.ArkAccessKey, cfg.ArkSecretKey, logger, api.WithArkBaseURL(cfg.ArkBaseURL))
+		logger.Info("Ark API client configured", "region", cfg.ArkRegion)
+	}
+
+	var arkCodingPlanClient *api.ArkCodingPlanClient
+	if cfg.ArkConsoleCookie != "" {
+		arkCodingPlanClient = api.NewArkCodingPlanClient(cfg.ArkConsoleCookie, cfg.ArkConsoleCSRFToken, cfg.ArkConsoleWebID, logger)
+		// 启用 Cookie 自动刷新：CDP（浏览器运行时）优先，浏览器 DB（浏览器关闭时）兜底
+		arkCodingPlanClient.SetCookieExtractor(api.NewCompositeCookieExtractor(
+			api.NewCDPCookieExtractor(cfg.ArkCDPDebugURL, logger),
+			api.NewBrowserCookieExtractor(logger),
+		))
+		logger.Info("Ark Coding Plan client configured", "has_web_id", cfg.ArkConsoleWebID != "")
+	}
+
 	// Gemini provider - env vars or auto-detect from ~/.gemini/oauth_creds.json
 	var geminiClient *api.GeminiClient
 	var geminiCreds *api.GeminiCredentials
@@ -1205,6 +1223,11 @@ func run() error {
 		deepseekTr = tracker.NewDeepSeekTracker(db, logger)
 	}
 
+	var arkTr *tracker.ArkTracker
+	if cfg.HasProvider("ark") {
+		arkTr = tracker.NewArkTracker(db, logger)
+	}
+
 	var geminiTr *tracker.GeminiTracker
 	if cfg.HasProvider("gemini") {
 		geminiTr = tracker.NewGeminiTracker(db, logger)
@@ -1274,6 +1297,15 @@ func run() error {
 		deepseekAg = agent.NewDeepSeekAgent(deepseekClient, db, deepseekTr, cfg.PollInterval, logger, deepseekSm)
 	}
 
+	var arkAg *agent.ArkAgent
+	if arkClient != nil || arkCodingPlanClient != nil {
+		arkSm := agent.NewSessionManager(db, "ark", idleTimeout, logger)
+		arkAg = agent.NewArkAgent(arkClient, db, arkTr, cfg.PollInterval, logger, arkSm)
+		if arkCodingPlanClient != nil {
+			arkAg.SetCodingPlanClient(arkCodingPlanClient)
+		}
+	}
+
 	var geminiAg *agent.GeminiAgent
 	if geminiClient != nil {
 		geminiSm := agent.NewSessionManager(db, "gemini", idleTimeout, logger)
@@ -1320,6 +1352,14 @@ func run() error {
 	var apiIntegrationsAg *agent.APIIntegrationsIngestAgent
 	if cfg.APIIntegrationsEnabled {
 		apiIntegrationsAg = agent.NewAPIIntegrationsIngestAgent(db, cfg.APIIntegrationsDir, cfg.APIIntegrationsRetention, logger)
+	}
+
+	// 通用适配器（配置驱动平台）：Agent + Handler
+	var genericAg *generic.Agent
+	var genericHandler *generic.Handler
+	{
+		genericAg = generic.NewAgent(db, db, logger)
+		genericHandler = generic.NewHandler(genericAg, db)
 	}
 
 	// Create notification engine
@@ -1375,6 +1415,9 @@ func run() error {
 	}
 	if opencodeAg != nil {
 		opencodeAg.SetNotifier(notifier)
+	}
+	if arkAg != nil {
+		arkAg.SetNotifier(notifier)
 	}
 
 	// Wire polling checks - agents skip poll when telemetry disabled
@@ -1539,6 +1582,9 @@ func run() error {
 	if opencodeAg != nil {
 		opencodeAg.SetPollingCheck(func() bool { return isPollingEnabled("opencode") })
 	}
+	if arkAg != nil {
+		arkAg.SetPollingCheck(func() bool { return isPollingEnabled("ark") })
+	}
 
 	// Wire reset callbacks to trackers
 	tr.SetOnReset(func(quotaName string) {
@@ -1614,6 +1660,11 @@ func run() error {
 			notifier.Check(notify.QuotaStatus{Provider: "opencode", QuotaKey: quotaName, ResetOccurred: true})
 		})
 	}
+	if arkTr != nil {
+		arkTr.SetOnReset(func(quotaName string) {
+			notifier.Check(notify.QuotaStatus{Provider: "ark", QuotaKey: quotaName, ResetOccurred: true})
+		})
+	}
 
 	handler := web.NewHandler(db, tr, logger, nil, cfg, zaiTr)
 	handler.SetVersion(version)
@@ -1656,6 +1707,9 @@ func run() error {
 	}
 	if opencodeTr != nil {
 		handler.SetOpenCodeTracker(opencodeTr)
+	}
+	if arkTr != nil {
+		handler.SetArkTracker(arkTr)
 	}
 	agentMgr := agent.NewAgentManager(logger)
 	if ag != nil {
@@ -1703,9 +1757,15 @@ func run() error {
 	if opencodeAg != nil {
 		agentMgr.RegisterFactory("opencode", func() (agent.AgentRunner, error) { return opencodeAg, nil })
 	}
+	if arkAg != nil {
+		agentMgr.RegisterFactory("ark", func() (agent.AgentRunner, error) { return arkAg, nil })
+	}
 
 	if apiIntegrationsAg != nil {
 		agentMgr.RegisterFactory("api_integrations", func() (agent.AgentRunner, error) { return apiIntegrationsAg, nil })
+	}
+	if genericAg != nil {
+		agentMgr.RegisterFactory("generic", func() (agent.AgentRunner, error) { return genericAg, nil })
 	}
 	handler.SetAgentManager(agentMgr)
 	if minimaxMgr != nil {
@@ -1738,6 +1798,9 @@ func run() error {
 	}
 
 	server := web.NewServer(cfg.Port, handler, logger, cfg.AdminUser, cfg.AdminPassHash, cfg.Host, cfg.BasePath, cfg.MetricsToken, trustedProxy)
+	if genericHandler != nil {
+		server.SetGenericHandler(genericHandler)
+	}
 
 	// Setup signal handling
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1748,7 +1811,7 @@ func run() error {
 
 	// Start configured agents through the manager.
 	startedAny := false
-	for _, providerKey := range []string{"synthetic", "zai", "anthropic", "copilot", "codex", "antigravity", "minimax", "openrouter", "gemini", "cursor", "grok", "kimi", "moonshot", "deepseek", "opencode"} {
+	for _, providerKey := range []string{"synthetic", "zai", "anthropic", "copilot", "codex", "antigravity", "minimax", "openrouter", "gemini", "cursor", "grok", "kimi", "moonshot", "deepseek", "opencode", "ark"} {
 		if !isPollingEnabled(providerKey) {
 			continue
 		}
@@ -1759,6 +1822,11 @@ func run() error {
 	}
 	if apiIntegrationsAg != nil {
 		if err := agentMgr.Start("api_integrations"); err == nil {
+			startedAny = true
+		}
+	}
+	if genericAg != nil {
+		if err := agentMgr.Start("generic"); err == nil {
 			startedAny = true
 		}
 	}
