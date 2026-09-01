@@ -1,7 +1,7 @@
 # FR-1.1 测试报告（D4）
 
 > 交付物 D4 | 依据：requirements-fr-1.1-p0-adapters.md §7 验收标准 4
-> 报告日期：2026-08-28
+> 报告日期：2026-08-28（v1）| 2026-09-01（v2，新增智谱 CREDIT_LIMIT 解析测试）
 
 ## 1. 执行矩阵
 
@@ -56,3 +56,14 @@ go build -o onwatch.exe .   ✅ 通过（29MB）
 - **Coding Plan 支持已实现并通过真实接口验证**（2026-08-28）：`GetCodingPlanUsage` Cookie 鉴权，面板显示 session/weekly/monthly 三窗口百分比用量。
 - 全量测试中仅存在**既有 Windows 跨平台问题**（与 Ark 无关），已逐一记录。
 - 真实验证项按验收标准 §7.4 明确列出待办，不视为失败。
+
+## 7. 智谱 CREDIT_LIMIT 解析修复测试（2026-09-01 追加）
+
+| 项           | 内容                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 触发问题     | 国内版智谱（open.bigmodel.cn）返回 `CREDIT_LIMIT` 类型 limit，原 `ToSnapshot` 仅处理 `TIME_LIMIT`/`TOKENS_LIMIT`，面板用量全 0              |
+| 修复         | `internal/api/zai_types.go` `ToSnapshot` 新增 `CREDIT_LIMIT` 分支（`number=5` → Time 字段；`number=1` → Tokens 字段，保留 `nextResetTime`） |
+| 新增测试     | `TestZaiQuotaResponse_ToSnapshot_DomesticCreditLimit`（真实响应样本：Lite 套餐，5h 0/2000、周 2005/2000）                                   |
+| 测试结果     | ✅ `go test ./internal/api/ -run "TestZai"` 全绿（含既有 Zai 套件，无回归）                                                                  |
+| 真实接口验证 | ✅ HTTP 200，`success: true`，数据完整返回（2026-09-01）                                                                                     |
+| 待办         | 重启 onwatch 后确认面板显示（沙箱限制无法自动重启）                                                                                         |

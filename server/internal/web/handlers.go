@@ -2998,10 +2998,10 @@ func (h *Handler) historyBoth(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				entry := map[string]interface{}{
-					"capturedAt": s.CapturedAt.Format(time.RFC3339),
+					"capturedAt":        s.CapturedAt.Format(time.RFC3339),
 					"available_balance": s.AvailableBalance,
-					"voucher_balance": s.VoucherBalance,
-					"cash_balance": s.CashBalance,
+					"voucher_balance":   s.VoucherBalance,
+					"cash_balance":      s.CashBalance,
 				}
 				msData = append(msData, entry)
 			}
@@ -3952,11 +3952,11 @@ func (h *Handler) cyclesBoth(w http.ResponseWriter, r *http.Request) {
 	if h.config.HasProvider("deepseek") {
 		quotaType := "balance"
 		var dsCycles []map[string]interface{}
-		
-		// Use CNY as default if not specified elsewhere. DeepSeek could use USD, 
+
+		// Use CNY as default if not specified elsewhere. DeepSeek could use USD,
 		// but tracking one primary currency for UI is sufficient for summary.
 		currency := "CNY"
-		
+
 		if active, err := h.store.QueryActiveDeepSeekCycle(quotaType, currency); err == nil && active != nil {
 			dsCycles = append(dsCycles, deepseekCycleToMap(active))
 		}
@@ -7765,7 +7765,7 @@ func (h *Handler) cycleOverviewBoth(w http.ResponseWriter, r *http.Request) {
 			"cycles":     orCycles,
 		}
 	}
-	
+
 	if h.config.HasProvider("moonshot") {
 		quotaType := "balance"
 		var msCycles []map[string]interface{}

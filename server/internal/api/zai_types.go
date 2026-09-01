@@ -105,6 +105,32 @@ func (r *ZaiQuotaResponse) ToSnapshot(capturedAt time.Time) *ZaiSnapshot {
 				t := time.UnixMilli(*limit.NextResetMs)
 				snapshot.TokensNextResetTime = &t
 			}
+		case "CREDIT_LIMIT":
+			// 国内版（open.bigmodel.cn）Coding Plan 返回 CREDIT_LIMIT 类型：
+			// number=5 → 5 小时窗口（动态刷新，无固定重置时间）
+			// number=1 → 周窗口（带 nextResetTime）
+			// 周窗口映射到 Tokens 字段以保留重置倒计时，5 小时窗口映射到 Time 字段。
+			if limit.Number == 5 {
+				snapshot.TimeLimit = limit.Unit * limit.Number
+				snapshot.TimeUnit = limit.Unit
+				snapshot.TimeNumber = limit.Number
+				snapshot.TimeUsage = limit.Usage
+				snapshot.TimeCurrentValue = limit.CurrentValue
+				snapshot.TimeRemaining = limit.Remaining
+				snapshot.TimePercentage = limit.Percentage
+			} else {
+				snapshot.TokensLimit = limit.Unit * limit.Number
+				snapshot.TokensUnit = limit.Unit
+				snapshot.TokensNumber = limit.Number
+				snapshot.TokensUsage = limit.Usage
+				snapshot.TokensCurrentValue = limit.CurrentValue
+				snapshot.TokensRemaining = limit.Remaining
+				snapshot.TokensPercentage = limit.Percentage
+				if limit.NextResetMs != nil {
+					t := time.UnixMilli(*limit.NextResetMs)
+					snapshot.TokensNextResetTime = &t
+				}
+			}
 		}
 	}
 

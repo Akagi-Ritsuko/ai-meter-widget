@@ -66,7 +66,7 @@ A built-in adapter follows the standard platform-integration contract shared by 
 
 | ID | Requirement |
 |---|---|
-| ZHP-01 | The built-in Z.ai adapter serves 智谱 GLM through the cn region: `ZAI_REGION=cn` with `ZAI_API_KEY` set. Quota card displays usage / limit. |
+| ZHP-01 | The built-in Z.ai adapter serves 智谱 GLM through the cn region: `ZAI_REGION=cn` with `ZAI_API_KEY` set. Quota card displays usage / limit. → **✅ 接口真实验证通过（2026-09-01，Lite 套餐数据正常返回）；CREDIT_LIMIT 解析已修复（ADR-015），面板显示待重启确认** |
 | ZHP-02 | `ZAI_REGION=global` continues to work as before (no behavior change). |
 | ZHP-03 | Missing credential → `unconfigured`; invalid credential → `auth_failed` with clear message. |
 

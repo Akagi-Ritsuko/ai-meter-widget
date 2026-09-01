@@ -312,3 +312,80 @@ func TestZaiQuotaResponse_UnknownFields_Ignored(t *testing.T) {
 		t.Errorf("Usage = %v, want %v", resp.Limits[0].Usage, 1000)
 	}
 }
+
+// domesticZaiAPIResponse is a real response from the domestic Zhipu Coding Plan
+// endpoint (https://open.bigmodel.cn/api/monitor/usage/quota/limit), which uses
+// CREDIT_LIMIT entries instead of the international TIME_LIMIT/TOKENS_LIMIT.
+const domesticZaiAPIResponse = `{
+  "code": 200,
+  "msg": "操作成功",
+  "success": true,
+  "data": {
+    "limits": [
+      {"type": "CREDIT_LIMIT", "unit": 3, "number": 5, "usage": 2000, "currentValue": 0, "remaining": 2000, "percentage": 0},
+      {"type": "CREDIT_LIMIT", "unit": 6, "number": 1, "usage": 2000, "currentValue": 2005, "remaining": 0, "percentage": 100, "nextResetTime": 1788774654998}
+    ],
+    "level": "lite"
+  }
+}`
+
+func TestZaiQuotaResponse_ToSnapshot_DomesticCreditLimit(t *testing.T) {
+	resp, err := ParseZaiResponse([]byte(domesticZaiAPIResponse))
+	if err != nil {
+		t.Fatalf("Failed to parse domestic Zhipu response: %v", err)
+	}
+
+	if len(resp.Limits) != 2 {
+		t.Fatalf("Expected 2 limits, got %d", len(resp.Limits))
+	}
+	for i, l := range resp.Limits {
+		if l.Type != "CREDIT_LIMIT" {
+			t.Errorf("limit[%d] type = %q, want %q", i, l.Type, "CREDIT_LIMIT")
+		}
+	}
+
+	capturedAt := time.Date(2026, 9, 1, 8, 30, 0, 0, time.UTC)
+	snapshot := resp.ToSnapshot(capturedAt)
+
+	// 5-hour window (number=5) maps to Time fields: 0/2000 used, 0%.
+	if snapshot.TimeNumber != 5 {
+		t.Errorf("TimeNumber = %d, want %d", snapshot.TimeNumber, 5)
+	}
+	if snapshot.TimeUsage != 2000 {
+		t.Errorf("TimeUsage = %v, want %v", snapshot.TimeUsage, 2000)
+	}
+	if snapshot.TimeCurrentValue != 0 {
+		t.Errorf("TimeCurrentValue = %v, want %v", snapshot.TimeCurrentValue, 0)
+	}
+	if snapshot.TimeRemaining != 2000 {
+		t.Errorf("TimeRemaining = %v, want %v", snapshot.TimeRemaining, 2000)
+	}
+	if snapshot.TimePercentage != 0 {
+		t.Errorf("TimePercentage = %d, want %d", snapshot.TimePercentage, 0)
+	}
+
+	// Weekly window (number=1) maps to Tokens fields: 2005/2000 used, 100%,
+	// with the reset time preserved for the countdown.
+	if snapshot.TokensNumber != 1 {
+		t.Errorf("TokensNumber = %d, want %d", snapshot.TokensNumber, 1)
+	}
+	if snapshot.TokensUsage != 2000 {
+		t.Errorf("TokensUsage = %v, want %v", snapshot.TokensUsage, 2000)
+	}
+	if snapshot.TokensCurrentValue != 2005 {
+		t.Errorf("TokensCurrentValue = %v, want %v", snapshot.TokensCurrentValue, 2005)
+	}
+	if snapshot.TokensRemaining != 0 {
+		t.Errorf("TokensRemaining = %v, want %v", snapshot.TokensRemaining, 0)
+	}
+	if snapshot.TokensPercentage != 100 {
+		t.Errorf("TokensPercentage = %d, want %d", snapshot.TokensPercentage, 100)
+	}
+	if snapshot.TokensNextResetTime == nil {
+		t.Fatal("TokensNextResetTime should not be nil for the weekly window")
+	}
+	expectedReset := time.UnixMilli(1788774654998)
+	if !snapshot.TokensNextResetTime.Equal(expectedReset) {
+		t.Errorf("TokensNextResetTime = %v, want %v", snapshot.TokensNextResetTime, expectedReset)
+	}
+}

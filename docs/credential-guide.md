@@ -2,7 +2,7 @@
 
 > 交付物 D3 | 依据：requirements-fr-1.1-p0-adapters.md CRD-04
 > 覆盖平台：DeepSeek / 火山 Ark / 智谱 GLM / OpenCode
-> 版本：v3 | 更新：2026-08-31（新增 CDP 自动刷新、面板设置页配置方式）
+> 版本：v4 | 更新：2026-09-01（智谱国内版 CREDIT_LIMIT 解析修复说明）
 
 ## 1. 通用说明
 
@@ -73,16 +73,21 @@ ARK_CDP_DEBUG_URL=http://localhost:9222
 
 **面板设置页配置**：Settings → Providers → Volcano Ark ⚙️，可配置 Coding Plan Cookie/WebID、Agent Plan AK/SK、Region（保存后重启 daemon 生效）。
 
-### 智谱 GLM（Z.ai cn 区域）
+### 智谱 GLM（Z.ai cn 区域 / 智谱 Coding Plan）
 
 | 变量 | 说明 |
 |---|---|
-| `ZAI_API_KEY` | Z.ai / 智谱开放平台 API Key |
-| `ZAI_REGION` | 设为 `cn`（智谱开放平台）或 `global`（z.ai 国际版） |
-| `ZAI_BASE_URL` | 可选，cn 区域需指向智谱开放平台域名 |
+| `ZAI_API_KEY` | 智谱开放平台 API Key（Coding Plan 订阅后查询返回套餐额度） |
+| `ZAI_REGION` | 设为 `cn`（智谱开放平台 open.bigmodel.cn）或 `global`（z.ai 国际版） |
+| `ZAI_BASE_URL` | 可选；`ZAI_REGION=cn` 时默认自动指向 `https://open.bigmodel.cn/api`，无需手动设置 |
 
 获取：https://open.bigmodel.cn → API Keys 页面创建。
 面板设置：Settings → Providers → Z.ai ⚙️（API Key + Region）。
+
+> **国内版（cn）说明（2026-09-01 验证）**：
+> - 用量接口：`GET https://open.bigmodel.cn/api/monitor/usage/quota/limit`，鉴权 `Authorization: <API Key>`（不带 Bearer 前缀）。
+> - 返回 `CREDIT_LIMIT` 类型 limit（5 小时窗口 + 周窗口），与 z.ai 国际版的 `TIME_LIMIT`/`TOKENS_LIMIT` 不同；解析器已支持（ADR-015）。
+> - 实测返回示例：Lite 套餐，5 小时窗口 0/2000（0%）、周窗口 2005/2000（100%，已超额）。
 
 ### OpenCode（OpenCode Go 订阅）
 

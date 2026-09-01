@@ -74,6 +74,8 @@ function getCurrentProvider() {
   if (kimiGrid) return 'kimi';
   const opencodeGrid = document.getElementById('quota-grid-opencode');
   if (opencodeGrid) return 'opencode';
+  const arkGrid = document.getElementById('quota-grid-ark');
+  if (arkGrid) return 'ark';
   const grid = document.getElementById('quota-grid');
   return (grid && grid.dataset.provider) || 'synthetic';
 }

@@ -2,14 +2,15 @@
 
 记录项目关键决策及其背景，便于追溯"为什么这么做"。
 
-> 版本：v3 | 更新日期：2026-08-31
-> 变更摘要：新增 ADR-006 ~ ADR-014（火山引擎 Coding Plan、Cookie 自动刷新、Ark 前端渲染、Insights 样式统一）
+> 版本：v4 | 更新日期：2026-09-01
+> 变更摘要：新增 ADR-015（智谱国内版 CREDIT_LIMIT 解析修复）；v3 新增 ADR-006 ~ ADR-014（火山引擎 Coding Plan、Cookie 自动刷新、Ark 前端渲染、Insights 样式统一）
 
 ## 目录
 
 - [ADR-001](#adr-001fork-onwatch-作为聚合服务底座) ~ [ADR-005](#adr-005p0-平台实现方式调整)：底座与 Phase 1 决策（2026-08-27）
 - [ADR-006](#adr-006火山引擎-coding-plan-采用控制台-cookie-鉴权) ~ [ADR-010](#adr-010cookie-自动刷新采用-cdp--浏览器-db-组合提取)：Ark 适配器核心决策（2026-08-28）
 - [ADR-011](#adr-011ark-前端渲染补全) ~ [ADR-014](#adr-014insights-卡片样式统一)：面板集成与样式决策（2026-08-31）
+- [ADR-015](#adr-015智谱国内版-credit_limit-解析修复)：智谱 Coding Plan 适配修复（2026-09-01）
 
 ---
 
@@ -135,6 +136,17 @@
 - **背景**：Usage Insights 的 insight-card 与配额卡片 quota-card 视觉不一致（小圆角/无边框阴影/紧凑内边距）。
 - **决策**：`.insight-card` 基础样式对齐 `.quota-card`（radius-lg / 22px padding / shadow-card / border-default；hover 同升起效果）；severity 着色保留（mix 到 surface-card）。
 - **理由**：统一视觉语言，降低维护成本。
+
+## ADR-015：智谱国内版 CREDIT_LIMIT 解析修复
+
+- **日期**：2026-09-01
+- **状态**：已采纳
+- **背景**：用户配置 `ZAI_REGION=cn`（国内版 open.bigmodel.cn）后，面板 Z.ai 卡片用量全 0 且日志无错误。真实接口验证发现国内版返回 `CREDIT_LIMIT` 类型 limit（`{unit, number, usage, currentValue, remaining, percentage, nextResetTime}`），而 `ToSnapshot` 仅处理国际版（z.ai）的 `TIME_LIMIT`/`TOKENS_LIMIT`，两个 limit 均被跳过。
+- **决策**：`ToSnapshot` 新增 `CREDIT_LIMIT` 分支——`number=5`（5 小时窗口，动态刷新无固定重置）映射到 Time 字段；`number=1`（周窗口，带 `nextResetTime`）映射到 Tokens 字段以保留重置倒计时。新增真实响应样本单测 `TestZaiQuotaResponse_ToSnapshot_DomesticCreditLimit`。
+- **理由**：国内版与国际版响应结构同 wrapper（`code/msg/data/success`）但 limit 类型不同；复用现有快照字段避免 DB 迁移，周窗口映射到 Tokens 字段可复用 `TokensNextResetTime` 倒计时能力。
+- **验证数据**：Lite 套餐，5 小时窗口 0/2000（0%），周窗口 2005/2000（100%，已超额）。
+- **影响文件**：`internal/api/zai_types.go`、`internal/api/zai_types_test.go`
+- **待办**：重启 onwatch 后确认面板显示。
 
 ---
 

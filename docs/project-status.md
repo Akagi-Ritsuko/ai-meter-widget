@@ -1,7 +1,7 @@
 # 项目工作进度报告
 
-> 版本：v3 | 报告日期：2026-08-31
-> 关联：[roadmap.md](roadmap.md) | [decisions.md](decisions.md) | [phase2-plan.md](phase2-plan.md)
+> 版本：v4 | 报告日期：2026-09-01
+> 关联：[roadmap.md](roadmap.md) | [decisions.md](decisions.md) | [phase2-plan.md](phase2-plan.md) | [project-tracking.md](project-tracking.md)
 
 ## 1. 项目基本信息
 
@@ -10,15 +10,15 @@
 | 项目名称 | ai-meter-widget（基于 onWatch v2.13.5 fork） |
 | 模块标识 | `github.com/onllm-dev/onwatch/v2`（Go 1.26.7） |
 | 当前里程碑 | Phase 2 通用适配器 + P0 平台（代码完成） |
-| 报告日期 | 2026-08-31 |
-| 决策记录 | ADR-001 ~ ADR-014（[decisions.md](decisions.md)） |
+| 报告日期 | 2026-09-01 |
+| 决策记录 | ADR-001 ~ ADR-015（[decisions.md](decisions.md)） |
 
 ## 2. 里程碑总览
 
 | Phase | 状态 | 完成度 | 剩余事项 |
 |---|---|---|---|
 | 1 底座跑通 | ✅ 核心完成 | 90% | Claude/Codex 凭证验证、24h soak、交叉编译 |
-| 2 通用适配器 + P0 | 🔄 代码完成 | 95% | DeepSeek/智谱/OpenCode 真实验证（待用户凭证） |
+| 2 通用适配器 + P0 | 🔄 代码完成 | 96% | DeepSeek/OpenCode 真实验证（待用户凭证）；智谱面板显示待重启确认 |
 | 3 统一指标 API | 未开始 | 0% | - |
 | 4 桌面浮窗 + 告警 | 未开始 | 0% | - |
 | 5 ESP32 墨水屏 | 未开始 | 0% | - |
@@ -57,6 +57,14 @@
 - P2-15：[generic-adapter-guide.md](generic-adapter-guide.md) 零代码接入指南
 - P2-16：验收清单更新（[phase2-plan.md](phase2-plan.md)）
 
+### 3.4 智谱 Coding Plan 真实接口验证 + CREDIT_LIMIT 解析修复（2026-09-01）
+
+- **真实接口验证**：配置 `ZAI_REGION=cn` 后直接请求 `https://open.bigmodel.cn/api/monitor/usage/quota/limit`，返回 HTTP 200、`success: true`，数据完整（Lite 套餐：5 小时窗口 0/2000、周窗口 2005/2000 已超额）。
+- **发现根因**：国内版返回 `CREDIT_LIMIT` 类型 limit，而 `ToSnapshot` 仅处理国际版（z.ai）的 `TIME_LIMIT`/`TOKENS_LIMIT`，导致面板用量全 0 且日志无错误。
+- **修复**：`zai_types.go` 新增 `CREDIT_LIMIT` 分支（`number=5` → Time 字段；`number=1` → Tokens 字段保留重置倒计时）+ 真实样本单测（ADR-015）。
+- **测试**：`go test ./internal/api/ -run "TestZai"` 全绿，无回归。
+- **待办**：重启 onwatch 确认面板显示（沙箱限制无法自动重启）。
+
 ## 4. 问题处理记录
 
 | 问题 | 根因 | 对策 | 结果 |
@@ -69,6 +77,7 @@
 | Provider Controls 无 Ark 设置入口 | `providerSettingsConfig` 未注册 | 前后端补设置（ADR-012） | ✅ 修复 |
 | start-edge-debug.bat 闪退/不生效 | ①UTF-8 中文被 cmd 按 GBK 解析 ②Edge 启动加速接管 ③Edge 路径带空格 | 纯 ASCII + 独立配置目录 + 注册表定位 | ✅ 修复 |
 | Insights 卡片样式与配额卡不一致 | 独立样式定义 | 基础样式对齐 .quota-card（ADR-014） | ✅ 修复 |
+| 智谱面板用量全 0（日志无错误） | 国内版返回 `CREDIT_LIMIT` 类型，解析器只认 `TIME_LIMIT`/`TOKENS_LIMIT` | `ToSnapshot` 新增 `CREDIT_LIMIT` 分支（ADR-015） | ✅ 修复 + 单测；面板待重启确认 |
 
 完整明细：[ark-interface-research.md](ark-interface-research.md) §9。
 
@@ -81,14 +90,15 @@
 | store / tracker / config / agent | ✅ 全绿 |
 | web 包 | ⚠️ 1 例既有失败（Windows Q8，非本项目引入） |
 | api 包全量 | ⚠️ `extra_coverage_test.go` Windows 构建失败（既有，临时移开跑） |
-| 真实接口验证 | ✅ Ark Coding Plan；⏳ DeepSeek/智谱/OpenCode 待凭证 |
+| 真实接口验证 | ✅ Ark Coding Plan；✅ 智谱（2026-09-01，CREDIT_LIMIT 已修复）；⏳ DeepSeek/OpenCode 待凭证 |
 
 ## 6. 待办清单
 
 | 优先级 | 项 | 责任 | 说明 |
 |---|---|---|---|
+| P1 | 重启 onwatch 确认智谱面板显示（CREDIT_LIMIT 修复生效） | guotao | 新二进制已构建，沙箱限制需手动重启 |
 | P1 | DeepSeek 真实验证（P2-10） | 用户提供 `DEEPSEEK_API_KEY` | 配置后面板验证 |
-| P1 | 智谱 GLM 真实验证（P2-11） | 用户提供 `ZAI_API_KEY` + `ZAI_REGION=cn` | 同上 |
+| P1 | 智谱 GLM 面板确认（P2-11） | 用户提供 `ZAI_API_KEY` + `ZAI_REGION=cn` | 接口已验证，面板待重启确认 |
 | P1 | OpenCode 真实验证（P2-12） | 用户提供 `OPENCODE_GO_*` | 同上 |
 | P2 | Phase 1 收尾（24h soak、交叉编译、Claude/Codex 验证） | 执行人 | 不阻塞 Phase 3 |
 | P2 | CDP 无头模式探索 | 执行人 | 减少"调试 Edge 需运行"约束 |
@@ -113,3 +123,16 @@
 **文档**：
 - 更新：roadmap（v4）、decisions（v3，ADR-006~014）、phase2-plan、ark-interface-research（v3）、credential-guide（v3）、requirements-fr-1.1、README
 - 新建：generic-adapter-guide.md、verification-fr-1.1.md、test-report-fr-1.1.md、credential-guide.md、ark-interface-research.md
+
+## 8. 变更文件清单（2026-09-01，智谱 CREDIT_LIMIT 修复）
+
+**后端（Go）**：
+- `internal/api/zai_types.go`：`ToSnapshot` 新增 `CREDIT_LIMIT` 分支（`number=5` → Time 字段；`number=1` → Tokens 字段保留重置倒计时）
+- `internal/api/zai_types_test.go`：新增 `TestZaiQuotaResponse_ToSnapshot_DomesticCreditLimit`（真实响应样本）
+
+**构建产物**：
+- `server/onwatch.exe`：重新构建（含 CREDIT_LIMIT 修复）
+
+**文档**：
+- 新建：project-tracking.md（标准化跟踪文档：变更记录/里程碑规划/需求待完成项）
+- 更新：decisions（v4，ADR-015）、credential-guide（v4）、verification-fr-1.1（TC-02 智谱 ✅）、test-report-fr-1.1（v2，§7）、project-status（v4）、roadmap（v5）
