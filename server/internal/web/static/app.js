@@ -399,13 +399,88 @@ function updateCodexProfileTabsVisibility() {
 function refreshAll() {
   const refreshBtn = document.getElementById('refresh-btn');
   if (refreshBtn) refreshBtn.classList.add('spinning');
-  const tasks = [fetchCurrent(), fetchDeepInsights(), fetchHistory()];
+  const tasks = [fetchCurrent(), fetchDeepInsights(), fetchHistory(), fetchUnifiedStats()];
   if (shouldShowCyclesTable()) tasks.push(fetchCycles());
   if (shouldShowSessionsTable()) tasks.push(fetchSessions());
   if (shouldShowOverviewTable()) tasks.push(fetchCycleOverview());
   Promise.all(tasks).finally(() => {
     if (refreshBtn) setTimeout(() => refreshBtn.classList.remove('spinning'), 600);
   });
+}
+
+// ── Unified Token/Cost Summary (P3-05) ──
+// Renders a cross-platform summary from GET /api/metrics. Only platforms that
+// actually report cost/token data get a card — platforms without data are
+// omitted entirely (no zero placeholders), and the section stays hidden when
+// no platform has data at all.
+
+function formatUnifiedTokens(value) {
+  if (!Number.isFinite(value)) return '--';
+  const abs = Math.abs(value);
+  if (abs >= 1e9) return (value / 1e9).toFixed(abs >= 1e10 ? 0 : 1) + 'B';
+  if (abs >= 1e6) return (value / 1e6).toFixed(abs >= 1e7 ? 0 : 1) + 'M';
+  if (abs >= 1e3) return (value / 1e3).toFixed(abs >= 1e4 ? 0 : 1) + 'k';
+  return String(Math.round(value));
+}
+
+function formatUnifiedCost(value, currency) {
+  if (!Number.isFinite(value)) return '--';
+  const num = Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(2);
+  const cur = (currency || '').toUpperCase();
+  if (cur === 'USD') return '$' + num;
+  if (cur === 'CNY') return '\u00a5' + num;
+  return num + (cur ? ' ' + cur : '');
+}
+
+function renderUnifiedStats(snapshots) {
+  const section = document.getElementById('unified-stats-section');
+  const grid = document.getElementById('unified-stats-grid');
+  if (!section || !grid) return;
+
+  const entries = (Array.isArray(snapshots) ? snapshots : []).filter(s =>
+    s && s.metrics && (s.metrics.cost || s.metrics.tokens));
+
+  if (!entries.length) {
+    grid.innerHTML = '';
+    section.hidden = true;
+    return;
+  }
+
+  grid.innerHTML = entries.map(s => {
+    const rows = [];
+    if (s.metrics.cost) {
+      rows.push(['Cost today', formatUnifiedCost(s.metrics.cost.today, s.metrics.cost.currency)]);
+      rows.push(['Cost month', formatUnifiedCost(s.metrics.cost.month, s.metrics.cost.currency)]);
+    }
+    if (s.metrics.tokens) {
+      rows.push(['Tokens today', formatUnifiedTokens(s.metrics.tokens.today)]);
+      rows.push(['Tokens month', formatUnifiedTokens(s.metrics.tokens.month)]);
+    }
+    const name = escapeHtml(s.display_name || s.platform || 'Unknown');
+    return `<article class="unified-stat-card">
+      <span class="unified-stat-name">${name}</span>
+      <div class="unified-stat-rows">
+        ${rows.map(([label, value]) => `
+        <div class="unified-stat-row">
+          <span class="unified-stat-label">${label}</span>
+          <span class="unified-stat-value">${escapeHtml(value)}</span>
+        </div>`).join('')}
+      </div>
+    </article>`;
+  }).join('');
+  section.hidden = false;
+}
+
+async function fetchUnifiedStats() {
+  const section = document.getElementById('unified-stats-section');
+  if (!section) return;
+  try {
+    const res = await authFetch(`${API_BASE}/api/metrics`);
+    if (!res.ok) throw new Error('Failed to fetch unified metrics');
+    renderUnifiedStats(await res.json());
+  } catch (e) {
+    // Non-critical summary: keep whatever was last rendered
+  }
 }
 
 function initCodexProfileTabs() {
@@ -3565,18 +3640,58 @@ function animateValue(el, from, to, duration, formatter) {
   requestAnimationFrame(step);
 }
 
+// ── Reset countdown (P3-09): data-reset-at 客户端计算模式 ──
+// 卡片渲染时仅在倒计时元素上盖 data-reset-at 时间戳，startCountdowns 每秒按
+// Date.now() 重算剩余时长（免递减累计漂移）；无重置时间的窗口直接隐藏倒计时。
+
+// resetsAt（ISO 字符串）距现在的剩余秒数；缺失/无效/已过期为 0。
+function countdownSecondsFrom(resetsAt) {
+  const d = parseDateValue(resetsAt);
+  if (!d) return 0;
+  return Math.max(0, Math.floor((d.getTime() - Date.now()) / 1000));
+}
+
+// 将倒计时元素绑定到重置时间：写 data-reset-at 并立即渲染文本与 imminent 态；
+// resetsAt 为空时隐藏元素并清理状态注册（不再显示 '--:--'）。
+// stateKey 对应 State.currentQuotas 键（如 'grok-credits'）；传 null 表示
+// 状态由别处维护（如 ark 富对象），此处仅同步元素时间戳。
+function applyResetCountdown(el, resetsAt, stateKey) {
+  if (!el) return;
+  if (!resetsAt) {
+    delete el.dataset.resetAt;
+    el.style.display = 'none';
+    el.classList.remove('imminent');
+    if (stateKey) delete State.currentQuotas[stateKey];
+    return;
+  }
+  const secs = countdownSecondsFrom(resetsAt);
+  el.dataset.resetAt = resetsAt;
+  el.style.display = '';
+  el.textContent = formatDuration(secs);
+  el.classList.toggle('imminent', secs < 1800);
+  if (stateKey) State.currentQuotas[stateKey] = { timeUntilResetSeconds: secs };
+}
+
 function startCountdowns() {
   if (State.countdownInterval) clearInterval(State.countdownInterval);
   State.countdownInterval = setInterval(() => {
     Object.keys(State.currentQuotas).forEach(type => {
       const data = State.currentQuotas[type];
-      if (data && data.timeUntilResetSeconds > 0) {
+      if (!data) return;
+      const el = document.getElementById(`countdown-${type}`);
+      if (!el) return;
+      // data-reset-at 模式：按重置时间戳重算，免递减累计漂移
+      if (el.dataset.resetAt) {
+        const secs = countdownSecondsFrom(el.dataset.resetAt);
+        data.timeUntilResetSeconds = secs;
+        el.textContent = formatDuration(secs);
+        el.classList.toggle('imminent', secs < 1800);
+        return;
+      }
+      if (data.timeUntilResetSeconds > 0) {
         data.timeUntilResetSeconds--;
-        const el = document.getElementById(`countdown-${type}`);
-        if (el) {
-          el.textContent = formatDuration(data.timeUntilResetSeconds);
-          el.classList.toggle('imminent', data.timeUntilResetSeconds < 1800);
-        }
+        el.textContent = formatDuration(data.timeUntilResetSeconds);
+        el.classList.toggle('imminent', data.timeUntilResetSeconds < 1800);
       }
     });
   }, 1000);
@@ -3597,9 +3712,6 @@ function renderGrokQuotaCards(quotas, containerId) {
     const name = (q.name || 'credits');
     const label = (name === 'credits') ? 'Credits' : (window.GrokDisplayName ? window.GrokDisplayName(name) : name);
     const resetsAt = q.resets_at || q.resetsAt || '';
-    const cdSecs = resetsAt ? Math.max(0, Math.floor((new Date(resetsAt).getTime() - Date.now()) / 1000)) : 0;
-    const cdText = cdSecs > 0 ? formatDuration(cdSecs) : '--:--';
-    if (resetsAt) State.currentQuotas['grok-' + name] = { timeUntilResetSeconds: cdSecs };
     const statusCfg = statusConfig[status] || statusConfig.healthy;
     const card = document.createElement('article');
     card.className = 'quota-card grok-card';
@@ -3614,7 +3726,7 @@ function renderGrokQuotaCards(quotas, containerId) {
             ${label}
           </h2>
         </div>
-        <span class="countdown" id="countdown-grok-${name}"${resetsAt ? ` data-reset-at="${resetsAt}"` : ' style="display:none"'}>${cdText}</span>
+        <span class="countdown" id="countdown-grok-${name}" style="display:none"></span>
       </header>
       <div class="progress-stats">
         <span class="usage-percent" id="percent-grok-${name}">${pctStr}%</span>
@@ -3634,6 +3746,7 @@ function renderGrokQuotaCards(quotas, containerId) {
       </footer>
     `;
     container.appendChild(card);
+    applyResetCountdown(document.getElementById(`countdown-grok-${name}`), resetsAt, 'grok-' + name);
   });
 }
 
@@ -3667,13 +3780,7 @@ function updateGrokQuotaCards(quotas, containerId) {
       statusEl.innerHTML = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${cfg.icon}"/></svg> ${cfg.label}`;
     }
     const cd = document.getElementById('countdown-grok-' + name);
-    if (cd && resetsAt) {
-      const secs = Math.max(0, Math.floor((new Date(resetsAt).getTime() - Date.now()) / 1000));
-      State.currentQuotas['grok-' + name] = { timeUntilResetSeconds: secs };
-      cd.dataset.resetAt = resetsAt;
-      cd.style.display = '';
-      cd.textContent = secs > 0 ? formatDuration(secs) : '--:--';
-    }
+    if (cd) applyResetCountdown(cd, resetsAt, 'grok-' + name);
   });
 }
 
@@ -3696,9 +3803,6 @@ function renderKimiQuotaCards(quotas, containerId) {
     const name = (q.name || 'seven_day');
     const label = q.displayName || q.label || kimiDisplayName(name);
     const resetsAt = q.resets_at || q.resetsAt || '';
-    const cdSecs = resetsAt ? Math.max(0, Math.floor((new Date(resetsAt).getTime() - Date.now()) / 1000)) : 0;
-    const cdText = cdSecs > 0 ? formatDuration(cdSecs) : '--:--';
-    if (resetsAt) State.currentQuotas['kimi-' + name] = { timeUntilResetSeconds: cdSecs };
     const statusCfg = statusConfig[status] || statusConfig.healthy;
     const card = document.createElement('article');
     card.className = 'quota-card kimi-card';
@@ -3713,7 +3817,7 @@ function renderKimiQuotaCards(quotas, containerId) {
             ${label}
           </h2>
         </div>
-        <span class="countdown" id="countdown-kimi-${name}"${resetsAt ? ` data-reset-at="${resetsAt}"` : ' style="display:none"'}>${cdText}</span>
+        <span class="countdown" id="countdown-kimi-${name}" style="display:none"></span>
       </header>
       <div class="progress-stats">
         <span class="usage-percent" id="percent-kimi-${name}">${pctStr}%</span>
@@ -3733,6 +3837,7 @@ function renderKimiQuotaCards(quotas, containerId) {
       </footer>
     `;
     container.appendChild(card);
+    applyResetCountdown(document.getElementById(`countdown-kimi-${name}`), resetsAt, 'kimi-' + name);
   });
 }
 
@@ -3775,13 +3880,7 @@ function updateKimiQuotaCards(quotas, containerId) {
       statusEl.innerHTML = `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${cfg.icon}"/></svg> ${cfg.label}`;
     }
     const cd = document.getElementById('countdown-kimi-' + name);
-    if (cd && resetsAt) {
-      const secs = Math.max(0, Math.floor((new Date(resetsAt).getTime() - Date.now()) / 1000));
-      State.currentQuotas['kimi-' + name] = { timeUntilResetSeconds: secs };
-      cd.dataset.resetAt = resetsAt;
-      cd.style.display = '';
-      cd.textContent = secs > 0 ? formatDuration(secs) : '--:--';
-    }
+    if (cd) applyResetCountdown(cd, resetsAt, 'kimi-' + name);
   });
 }
 const opencodeQuotaOrder = ['five_hour', 'weekly', 'monthly'];
@@ -3966,7 +4065,7 @@ function renderArkQuotaCards(quotas, containerId) {
           <svg class="quota-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icon}</svg>
           ${displayName}
         </h2>
-        <span class="countdown" id="${countdownId}">${q.timeUntilResetSeconds > 0 ? formatDuration(q.timeUntilResetSeconds) : '--:--'}</span>
+        <span class="countdown" id="${countdownId}" style="display:none"></span>
       </header>
       <div class="progress-stats">
         <span class="usage-percent" id="${percentId}">${usagePct}%</span>
@@ -3986,6 +4085,9 @@ function renderArkQuotaCards(quotas, containerId) {
       </footer>
     </article>`;
   }).join('');
+  quotas.forEach(q => {
+    applyResetCountdown(document.getElementById(`countdown-ark-${q.name}`), q.resetsAt || '', null);
+  });
 }
 
 function updateArkCard(quota) {
@@ -4040,13 +4142,7 @@ function updateArkCard(quota) {
     }
   }
   if (countdownEl) {
-    if (quota.timeUntilResetSeconds > 0) {
-      countdownEl.textContent = formatDuration(quota.timeUntilResetSeconds);
-      countdownEl.classList.toggle('imminent', quota.timeUntilResetSeconds < 1800);
-      countdownEl.style.display = '';
-    } else {
-      countdownEl.style.display = 'none';
-    }
+    applyResetCountdown(countdownEl, quota.resetsAt || '', null);
   }
 }
 
@@ -9206,7 +9302,7 @@ function startAutoRefresh() {
   if (State.refreshInterval) clearInterval(State.refreshInterval);
   State.refreshInterval = setInterval(() => {
     // Always refresh above-fold data
-    fetchCurrent(); fetchDeepInsights(); fetchHistory();
+    fetchCurrent(); fetchDeepInsights(); fetchHistory(); fetchUnifiedStats();
     // Only refresh below-fold sections that have been loaded
     if (shouldShowCyclesTable() && _lazyLoaded.has('.cycles-section')) fetchCycles();
     if (shouldShowOverviewTable() && _lazyLoaded.has('.cycle-overview-section')) fetchCycleOverview();
@@ -12088,6 +12184,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       fetchCurrent(),
       fetchDeepInsights(),
       fetchHistory('6h'),
+      fetchUnifiedStats(),
     ]);
 
     // Preload providers whose history tables should appear immediately.

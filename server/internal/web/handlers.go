@@ -909,7 +909,7 @@ func sanitizeSMTPError(err error) string {
 	}
 }
 
-// parseTimeRange parses a time range string (1h, 6h, 24h, 1d, 7d, 30d)
+// parseTimeRange parses a time range string (1h, 6h, 24h, 1d, 7d, 30d, 90d)
 func parseTimeRange(rangeStr string) (time.Duration, error) {
 	if rangeStr == "" {
 		return 6 * time.Hour, nil
@@ -926,6 +926,8 @@ func parseTimeRange(rangeStr string) (time.Duration, error) {
 		return 7 * 24 * time.Hour, nil
 	case "30d":
 		return 30 * 24 * time.Hour, nil
+	case "90d":
+		return 90 * 24 * time.Hour, nil
 	default:
 		return 0, fmt.Errorf("invalid range: %s", rangeStr)
 	}
@@ -2685,6 +2687,11 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.dispatchHistory(provider, w, r)
+}
+
+// dispatchHistory 按 provider 分发到对应的历史查询（旧路由与统一路由 /api/history/{platform} 共用）。
+func (h *Handler) dispatchHistory(provider string, w http.ResponseWriter, r *http.Request) {
 	switch provider {
 	case "both":
 		h.historyBoth(w, r)

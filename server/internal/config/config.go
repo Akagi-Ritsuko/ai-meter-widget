@@ -106,6 +106,9 @@ type Config struct {
 	APIIntegrationsDir       string        // ONWATCH_API_INTEGRATIONS_DIR (default: ~/.onwatch/api-integrations or /data/api-integrations)
 	APIIntegrationsRetention time.Duration // ONWATCH_API_INTEGRATIONS_RETENTION (example: 720h, 0 disables pruning)
 
+	// Provider snapshot retention (P3-07)
+	SnapshotRetention time.Duration // ONWATCH_SNAPSHOT_RETENTION (days, default: 100; 0 disables pruning)
+
 	// Shared configuration
 	PollInterval       time.Duration // ONWATCH_POLL_INTERVAL (seconds → Duration)
 	Port               int           // ONWATCH_PORT
@@ -458,6 +461,14 @@ func loadFromEnvAndFlags(flags *flagValues) (*Config, error) {
 			cfg.APIIntegrationsRetention = 0
 		} else if v, err := time.ParseDuration(env); err == nil {
 			cfg.APIIntegrationsRetention = v
+		}
+	}
+
+	// Provider snapshot retention (days; 0 disables pruning)
+	cfg.SnapshotRetention = 100 * 24 * time.Hour
+	if env := strings.TrimSpace(os.Getenv("ONWATCH_SNAPSHOT_RETENTION")); env != "" {
+		if v, err := strconv.Atoi(env); err == nil && v >= 0 {
+			cfg.SnapshotRetention = time.Duration(v) * 24 * time.Hour
 		}
 	}
 
@@ -897,6 +908,7 @@ func (c *Config) String() string {
 	fmt.Fprintf(&sb, "  APIIntegrationsEnabled: %v,\n", c.APIIntegrationsEnabled)
 	fmt.Fprintf(&sb, "  APIIntegrationsDir: %s,\n", c.APIIntegrationsDir)
 	fmt.Fprintf(&sb, "  APIIntegrationsRetention: %v,\n", c.APIIntegrationsRetention)
+	fmt.Fprintf(&sb, "  SnapshotRetention: %v,\n", c.SnapshotRetention)
 
 	// Redact Cursor token
 	cursorDisplay := redactAPIKey(c.CursorToken, "")

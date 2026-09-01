@@ -335,9 +335,25 @@
                     <span class="reset-time" id="reset-toolCalls">Resets: --</span>
                 </footer>
             </article>
-            {{end}}
+        {{end}}
         </div>
         {{end}}
+
+        <!-- Cross-platform token/cost summary (P3-05): populated from /api/metrics.
+             Only platforms reporting real cost/token data get a card; the whole
+             section stays hidden when no platform has data (no zero placeholders). -->
+        <section class="insights-panel" id="unified-stats-section" hidden>
+            <header class="section-header">
+                <h3 class="section-title">
+                    <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                    Token / Cost Summary
+                </h3>
+            </header>
+            <div class="unified-stats-grid" id="unified-stats-grid"></div>
+        </section>
 
         {{if eq .CurrentProvider "api-integrations"}}
         <div class="api-integrations-insights-panels">

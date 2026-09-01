@@ -1421,6 +1421,63 @@ button, input, select { font-family: inherit; }
   opacity: 0.7;
 }
 
+/* Unified Token/Cost Summary (P3-05) */
+.unified-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--layout-gap-sm);
+}
+
+.unified-stat-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+.unified-stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--border-focus);
+}
+
+.unified-stat-name {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--accent-teal);
+}
+
+.unified-stat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.unified-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.unified-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.unified-stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-primary);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Insight Cards Grid */
 .insights-cards {
   display: grid;

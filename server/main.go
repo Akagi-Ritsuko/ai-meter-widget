@@ -1354,6 +1354,9 @@ func run() error {
 		apiIntegrationsAg = agent.NewAPIIntegrationsIngestAgent(db, cfg.APIIntegrationsDir, cfg.APIIntegrationsRetention, logger)
 	}
 
+	// Provider snapshot retention pruning (P3-07)
+	snapshotRetentionAg := agent.NewSnapshotRetentionAgent(db, cfg.SnapshotRetention, logger)
+
 	// 通用适配器（配置驱动平台）：Agent + Handler
 	var genericAg *generic.Agent
 	var genericHandler *generic.Handler
@@ -1764,6 +1767,7 @@ func run() error {
 	if apiIntegrationsAg != nil {
 		agentMgr.RegisterFactory("api_integrations", func() (agent.AgentRunner, error) { return apiIntegrationsAg, nil })
 	}
+	agentMgr.RegisterFactory("snapshot_retention", func() (agent.AgentRunner, error) { return snapshotRetentionAg, nil })
 	if genericAg != nil {
 		agentMgr.RegisterFactory("generic", func() (agent.AgentRunner, error) { return genericAg, nil })
 	}
@@ -1824,6 +1828,9 @@ func run() error {
 		if err := agentMgr.Start("api_integrations"); err == nil {
 			startedAny = true
 		}
+	}
+	if err := agentMgr.Start("snapshot_retention"); err == nil {
+		startedAny = true
 	}
 	if genericAg != nil {
 		if err := agentMgr.Start("generic"); err == nil {
